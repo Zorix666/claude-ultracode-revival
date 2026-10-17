@@ -1,17 +1,17 @@
-# claude-ultracode-revival ⚡
+# claude-ultracode-revival
 
 > Restoring the hidden sixth **Ultracode** stop on the Claude Desktop effort slider — complete root cause analysis, persistent trigger capsule display, and a cross-version adaptive permanent patch.
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6?logo=windows&logoColor=white)](#usage)
+[![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)](#usage)
 [![Claude Desktop](https://img.shields.io/badge/claude%20desktop-2.31226%20~%202.42304+-black)](#how-it-works)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#)
 
 ---
 
-## 🧐 The Mysterious Symptoms
+## The Mysterious Symptoms
 
 Developers connecting Claude Desktop to Claude Code (especially via 3p custom gateways or DeepSeek endpoints) frequently encounter these confusing issues:
 
@@ -30,7 +30,7 @@ Developers connecting Claude Desktop to Claude Code (especially via 3p custom ga
 
 ---
 
-## 🔍 Root Cause Analysis (Source-Level)
+## Root Cause Analysis (Source-Level)
 
 Reverse engineering the Rollup/Vite JavaScript bundles inside WindowsApps reveals the complete chain of events:
 
@@ -88,7 +88,7 @@ Saving batch scripts in UTF-8 causes byte misalignment in Windows `cmd.exe`. Pur
 
 ---
 
-## ⚡ Is Ultracode Actually Real?
+## Is Ultracode Actually Real?
 
 **Yes, absolutely.**  
 When Ultracode is active:
@@ -98,7 +98,7 @@ When Ultracode is active:
 
 ---
 
-## 🚀 Usage (Automated Adaptive Patch)
+## Usage (Automated Adaptive Patch)
 
 The patch script features **cross-version dynamic detection**:
 - Queries `(Get-AppxPackage *Claude*).InstallLocation` dynamically.
@@ -109,7 +109,7 @@ The patch script features **cross-version dynamic detection**:
 
 ### Step 1: Clone or Download
 ```bash
-git clone https://github.com/<your-username>/claude-ultracode-revival.git
+git clone https://github.com/Zorix666/claude-ultracode-revival.git
 cd claude-ultracode-revival
 ```
 
@@ -130,7 +130,7 @@ The script will automatically:
 
 ---
 
-## 🛠️ The 4-Patch System (Diffs)
+## The 4-Patch System (Diffs)
 
 ### Patch 1: Stop 6 Catalog Expansion (`c227f4d5e-*.js`)
 ```diff
@@ -158,7 +158,7 @@ The script will automatically:
 
 ---
 
-## 🛡️ Defensive Configuration
+## Defensive Configuration
 
 In `~/.claude/settings.json`:
 ```json
@@ -174,5 +174,5 @@ In `%LOCALAPPDATA%\Claude-3p\configLibrary\<id>.json` (for 3p users):
 
 ---
 
-## 📄 License
+## License
 [MIT License](LICENSE) © 2026

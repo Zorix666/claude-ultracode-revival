@@ -1,16 +1,16 @@
-# Claude Desktop Ultracode 复活补丁 ⚡
+# Claude Desktop Ultracode 复活补丁
 
 > **揭秘 Claude Desktop 的 Ultracode「神秘消失」之谜：前端源码逆向、MSIX 静默升级陷阱、右下角胶囊常驻显示与永久 6 档 Effort 滑块跨版本自适应修复指南。**  
 > *[English Documentation](README.md) · 简体中文文档*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Platform: Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows&logoColor=white)](#一键安装与使用)
-[![Claude Desktop](https://img.shields.io/badge/Claude%20Desktop-2.31226%20~%202.42304+-black?logo=anthropic)](#跨版本自适应原理)
+[![Platform: Windows](https://img.shields.io/badge/Platform-Windows-0078D6)](#一键使用指南)
+[![Claude Desktop](https://img.shields.io/badge/Claude%20Desktop-2.31226%20~%202.42304+-black)](#跨版本自适应原理)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#)
 
 ---
 
-## 🧐 现象与离奇谜团
+## 现象与离奇谜团
 
 在使用 Claude Desktop（尤其是通过 3p 自定义网关接入 DeepSeek 等第三方模型）配合 Claude Code 开发时，许多开发者都遭遇过以下诡异现象：
 
@@ -29,7 +29,7 @@
 
 ---
 
-## 🔍 源码级深度破案：六大底层根因深度剖析
+## 源码级深度破案：六大底层根因深度剖析
 
 通过对 Claude Desktop 前端资源 Bundle（Rollup 打包）与 WindowsApps 底层文件架构的全面逆向反编译，彻底摸清了整个因果闭环：
 
@@ -95,7 +95,7 @@ Windows 在关机或开机时，经常会在后台**静默将应用覆盖升级�
 
 ---
 
-## ⚡ Ultracode 到底是不是噱头？真的会分出超多子 Agent 吗？
+## Ultracode 到底是不是噱头？真的会分出超多子 Agent 吗？
 
 **答：是的，绝对真实！这是 Ultracode 的灵魂所在。**
 
@@ -105,7 +105,7 @@ Windows 在关机或开机时，经常会在后台**静默将应用覆盖升级�
 
 ---
 
-## 🚀 解决方案与一键使用指南
+## 解决方案与一键使用指南
 
 本仓库提供了**全自动跨版本自适应注入工具**：
 - 自动通过 PowerShell `Get-AppxPackage` 获取当前最新安装的 Claude 目录；
@@ -116,7 +116,7 @@ Windows 在关机或开机时，经常会在后台**静默将应用覆盖升级�
 
 ### 步骤 1：克隆或下载本仓库
 ```bash
-git clone https://github.com/<your-username>/claude-ultracode-revival.git
+git clone https://github.com/Zorix666/claude-ultracode-revival.git
 cd claude-ultracode-revival
 ```
 
@@ -141,7 +141,7 @@ python apply_patch.py
 
 ---
 
-## 🛠️ 4 大核心补丁闭环原理 (Diff)
+## 4 大核心补丁闭环原理 (Diff)
 
 ### 补丁 1：扩展第 6 格刻度（自适应定位，如 `c227f4d5e-*.js`）
 ```diff
@@ -169,7 +169,7 @@ python apply_patch.py
 
 ---
 
-## 🛡️ 配置文件防御性推荐
+## 配置文件防御性推荐
 
 为了保证状态彻底稳定，建议检查以下两处配置：
 
@@ -187,5 +187,5 @@ python apply_patch.py
 
 ---
 
-## 📄 License
+## License
 [MIT License](LICENSE) © 2026
