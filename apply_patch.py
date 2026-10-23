@@ -117,17 +117,15 @@ def patch_bundle():
             vc_name = m1.group(1)
             ha_name = m1.group(2)
             f1_new = f'let i=[...e.filter(e=>!{vc_name}(e.id)&&{ha_name}([e]).length>0),{{id:"ultracode",name:"Ultracode"}}],a=i;'
-        else:
-            f1_new = 'let i=[...e.filter(e=>Fn([e]).length>0),{id:"ultracode",name:"Ultracode"}],a=i;'
-        f1_content = f1_content.replace(old_snippet, f1_new, 1)
-        with open(f1_path, 'w', encoding='utf-8') as f:
-            f.write(f1_content)
-        print(f"[OK] 成功扩展第 6 档刻度 -> {f1_name}")
+            f1_content = f1_content.replace(old_snippet, f1_new, 1)
+            with open(f1_path, 'w', encoding='utf-8') as f:
+                f.write(f1_content)
+            print(f"[OK] 成功注入第 6 档 Ultracode 刻度 -> {f1_name}")
     elif not f1_path:
-        print("[WARN] 未能定位到刻度文件 f1（如果已生效可忽略）")
+        print("[WARN] 未能定位到刻度扩展文件 f1")
 
     # -------------------------------------------------------------
-    # 步骤 2：定位并修补交互派发与呈现文件 (f2, 如 c9543da06-*.js)
+    # 步骤 2：定位并修补交互派发与呈现逻辑 (f2, 如 c9543da06-*.js)
     # -------------------------------------------------------------
     f2_path = None
     f2_content = None
@@ -172,6 +170,14 @@ def patch_bundle():
             modified_f2 = True
             print(f"[OK] 成功修复胶囊呈现实体挂钩 -> {f2_name}")
 
+        # 补丁 2.3：解除第三方模型（如 DeepSeek）的 Ultracode 拦截与自动重置
+        if 'disableWorkflows?.value!==!0&&u&&(!0)&&ge' in f2_content:
+            print(f"[OK] 第三方模型 Ultracode 放行已处于生效状态 -> {f2_name}")
+        elif '&&u&&(he||oe)&&ge' in f2_content:
+            f2_content = f2_content.replace('&&u&&(he||oe)&&ge', '&&u&&(!0)&&ge', 1)
+            modified_f2 = True
+            print(f"[OK] 成功放行第三方模型支持 Ultracode -> {f2_name}")
+
         if modified_f2:
             with open(f2_path, 'w', encoding='utf-8') as f:
                 f.write(f2_content)
@@ -187,36 +193,50 @@ def patch_bundle():
     for js in all_js:
         try:
             txt = open(js, 'r', encoding='utf-8').read()
-            if 'ModelSelectorEffort' in txt and 'I=v.findIndex(e=>e.id===y)' in txt:
+            if 'ModelSelectorEffort' in txt and ('I=v.findIndex(e=>e.id===y)' in txt or 'y==="xhigh"?"ultracode":y' in txt):
                 f3_path = js
                 f3_content = txt
-                break
-            elif 'ModelSelectorEffort' in txt and 'y==="xhigh"?"ultracode":y' in txt:
-                f3_path = js
-                f3_content = txt
-                print(f"[OK] 胶囊常驻显示 Ultracode 已生效 -> {os.path.basename(js)}")
                 break
         except Exception:
             continue
 
-    if f3_path and 'y==="xhigh"?"ultracode":y' not in f3_content:
+    if f3_path:
         f3_name = os.path.basename(f3_path)
         unlock_file(f3_path)
         shutil.copy2(f3_path, os.path.join(backup_dir, f"{f3_name}.bak-original"))
+        modified_f3 = False
 
+        # 补丁 3.1：索引计算映射
         p4_old = 'I=v.findIndex(e=>e.id===y),L=I>=0?I:0'
         p4_new = 'I=v.findIndex(e=>e.id===(y==="xhigh"?"ultracode":y)),L=I>=0?I:(y==="ultracode"||y==="xhigh"?v.length-1:0)'
         if p4_old in f3_content:
             f3_content = f3_content.replace(p4_old, p4_new, 1)
+            modified_f3 = True
+            print(f"[OK] 成功绑定胶囊索引查找 -> {f3_name}")
+        elif p4_new in f3_content:
+            print(f"[OK] 胶囊索引查找已处于生效状态 -> {f3_name}")
+
+        # 补丁 3.2：Trigger 药丸文字与高亮实时联动
+        expr = '(H===v.length-1||B?.id==="ultracode"||y==="ultracode"||y==="xhigh"?"Ultracode":q(L))'
+        target_render = 'render:typeof O=="function"?O({label:q(L),warningLabel:Z,open:M,disabled:S||!W}):O??t(ee,{variant:"ghost",size:C,"data-cds":"ModelSelectorEffort","aria-label":Oe,"aria-keyshortcuts":Ae,className:_("min-w-0 shrink-0",ce),children:[r("span",{className:"min-w-0 truncate",children:q(L)}),'
+        repl_render = f'render:typeof O=="function"?O({{label:{expr},warningLabel:Z,open:M,disabled:S||!W}}):O??t(ee,{{variant:"ghost",size:C,"data-cds":"ModelSelectorEffort","aria-label":Oe,"aria-keyshortcuts":Ae,className:_("min-w-0 shrink-0",ce),children:[r("span",{{className:_("min-w-0 truncate",_e&&"font-medium text-pro"),children:{expr}}}),'
+
+        if target_render in f3_content:
+            f3_content = f3_content.replace(target_render, repl_render, 1)
+            modified_f3 = True
+            print(f"[OK] 成功打通右下角胶囊实时联动与紫色高亮 -> {f3_name}")
+        elif expr in f3_content:
+            print(f"[OK] 右下角胶囊实时联动已处于生效状态 -> {f3_name}")
+
+        if modified_f3:
             with open(f3_path, 'w', encoding='utf-8') as f:
                 f.write(f3_content)
-            print(f"[OK] 成功绑定右下角胶囊常驻显示 Ultracode -> {f3_name}")
-    elif not f3_path:
+    else:
         print("[WARN] 未能定位到胶囊触发器组件 f3")
 
     print("\n" + "=" * 65)
     print("  [SUCCESS] 永久固化全部完成！")
-    print("  滑块已拥有 6 档，右下角胶囊将常驻显示为 Ultracode！")
+    print("  滑块已拥有 6 档，右下角胶囊将常驻显示为紫色的 Ultracode！")
     print("=" * 65)
 
     # 4. 重新拉起 Claude
