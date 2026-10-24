@@ -1,178 +1,119 @@
-# claude-ultracode-revival
+# Claude Desktop: Ultracode Restoration & Slider Revival Engine
 
-> Restoring the hidden sixth **Ultracode** stop on the Claude Desktop effort slider — complete root cause analysis, persistent trigger capsule display, and a cross-version adaptive permanent patch.
+> **A cross-version AST patcher for Claude Desktop on Windows. Restores the hidden 6th Ultracode stop, un-folds the collapsed effort slider on Claude 3.x, unlocks third-party models (e.g., DeepSeek), and makes the trigger pill persistently purple.**  
+> *English Documentation · [简体中文文档](README.zh-CN.md)*
 
-[English](README.md) · [简体中文](README.zh-CN.md)
-
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)](#usage)
-[![Claude Desktop](https://img.shields.io/badge/claude%20desktop-2.31226%20~%202.42304+-black)](#how-it-works)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Platform: Windows](https://img.shields.io/badge/Platform-Windows-0078D6)](#quick-start)
+[![Claude Desktop](https://img.shields.io/badge/Claude%20Desktop-v2.x%20~%20v3.x%20(3.6556.2+)-black)](#ast-replacement-specification)
+[![Release](https://img.shields.io/badge/Release-v2.0.0-purple.svg)](https://github.com/Zorix666/claude-ultracode-revival/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#)
 
 ---
 
-## The Mysterious Symptoms
+## Architectural Overview
 
-Developers connecting Claude Desktop to Claude Code (especially via 3p custom gateways or DeepSeek endpoints) frequently encounter these confusing issues:
+```mermaid
+flowchart TD
+    subgraph UI ["Frontend Presentation"]
+        Pill["Trigger Pill (Persistent Pro Purple)"]
+        Slider["Effort Slider (6 Stops / Faster-Smarter)"]
+        Menu["Claude 3.x Collapsed Submenu (Revived into Slider)"]
+    end
 
-1. **CLI has it, Desktop doesn't**:
-   - Claude Code CLI clearly reports `Ultracode on (Tab to toggle) · dynamic workflows on every task` under `/effort`.
-   - Claude Desktop effort slider only has 5 dots (`low` to `max`), with stop 6 completely missing.
-2. **Dragging the slider makes it vanish permanently**:
-   - Users who remember seeing it report that touching the slider makes Ultracode evaporate from the current session forever.
-   - Typing `/effort ultracode` only degrades to `Extra` or `High`, and the slider stays clamped at dot 4 or 5.
-3. **Bottom-right capsule stubbornly displays High**:
-   - Even when selecting the 6th dot, the persistent bottom-right Trigger Pill remains stuck on `High` rather than displaying `Ultracode`.
-4. **Rebooting undoes the manual edits**:
-   - Files manually patched disappear after a Windows reboot, and Claude reverts back to 5 stops.
-5. **Batch file closes immediately**:
-   - Double-clicking custom `.bat` scripts flashes a console window for one second and closes without showing the UAC elevation prompt.
+    subgraph Logic ["Frontend Bundle Core"]
+        ThinkingStyle["Layout Policy (thinkingStyle: separate)"]
+        ScaleFilter["Scale Filter Chain (ip / Fn)"]
+        Dispatch["Dispatch Handler (Ye / Ke / mt)"]
+        ModelGate["3rd-Party Model Gate (he || oe / me || K)"]
+        PresLevel["Presentation Hook (presentedEffortLevel)"]
+    end
+
+    subgraph State ["Runtime State & Gateway"]
+        Session["Active Session (local_*.json)"]
+        ThirdParty["3rd-Party Gateway (DeepSeek / OpenAI)"]
+        Official["Anthropic Direct API"]
+    end
+
+    ThinkingStyle -- "Un-folds Submenu -> Standalone Slider" --> Slider
+    ScaleFilter -- "Inject 6th Stop (Ultracode)" --> Slider
+    Slider -- "Bidirectional Dispatch (xhigh / ultracode)" --> Dispatch
+    ModelGate -- "Unlock 3P Models, Prevent Reset" --> ThirdParty
+    Dispatch -- "Persist ultracode: true" --> Session
+    Session -- "Hook presentedEffortLevel" --> PresLevel
+    PresLevel -- "Dynamic Linkage & Purple Pro Accent" --> Pill
+```
 
 ---
 
-## Root Cause Analysis (Source-Level)
+## Background & Root Causes
 
-Reverse engineering the Rollup/Vite JavaScript bundles inside WindowsApps reveals the complete chain of events:
+When running Claude Desktop on Windows (especially with third-party gateways like DeepSeek or alongside Claude Code), users encounter several architectural issues:
 
-### 1. Slider interaction forcibly clears Ultracode
-In the interaction bundle (e.g., `c9543da06-*.js`):
-```javascript
-be = h(e => {
-  let { level: t, ultracode: n, silent: r = !1 } = e;
-  let l = t === void 0 ? { ultracode: n } : { effortLevel: t, ultracode: n };
-});
-// Triggered on slider drag/click:
-Ye = h((e, t) => Ke(e, !1, { recordAsPick: t?.recordAsPick }), [Ke]);
-```
-The second parameter passed to `Ke` is hard-coded to `!1` (`false`).  
-**Every interaction with stops 1–5 dispatches `{ ultracode: false }`**, immediately clearing the flag from the active session!
-
-### 2. Static catalog (`published.json`) lacks stop 6
-The slider options are dynamically populated from the cached model catalog:
-```javascript
-function ip(e, t) {
-  let i = e.filter(e => ri(e.id) ? t : Fn([e]).length > 0);
-  return n.set(t, a), a;
-}
-```
-`published.json` distributed by Anthropic only defines 5 stops (`[low, medium, high, xhigh, max]`). `ultracode` is never enumerated in the catalog, clamping the array to 5 items.
-
-### 3. Native UI is fully implemented (just hidden)
-In `c8e04f916-*.js`:
-```javascript
-let V = Math.min(L ?? z?.index ?? I, _.length - 1),
-    H = _[V],
-    ge = H?.id === te; // te === "ultracode"
-
-re({ label: K(V), accent: ge, index: V });
-// accent: ge triggers "font-medium text-pro" (purple highlighted bold text)
-// overlay triggers glow animation: qf({ lit: e.atMax })
-```
-Anthropic already built the complete UI, purple accent, and light-up animation for the 6th stop.
-
-### 4. Why did the bottom-right trigger capsule still show "High"?
-Even when the slider reached stop 6, the bottom capsule displayed `High`:
-- The variable `presentedEffortLevel` (variable `tt` in `c9543da06-*.js`) was coded as `tt = G ? pe : null`, which solely pushed the underlying numerical level (`"xhigh"` or degraded `"high"`), completely dropping the active `ultracode` boolean state.
-- The trigger component (`c8e04f916-*.js`) evaluated `I = v.findIndex(e => e.id === y)`. Receiving `y = "high"`, it resolved to the 3rd/4th stop instead of the 6th stop (`"ultracode"`).
-- **The fix**: Linking `presentedEffortLevel` directly to `"ultracode"` and updating trigger fallback mapping guarantees the trigger capsule persistently renders **`Ultracode`**.
-
-### 5. Why does it vanish after reboot? (Silent MSIX Store Updates)
-Claude Desktop is distributed as a packaged MSIX app. During system restart, Windows Store frequently performs silent background updates (e.g. from `2.31226.1.0` to `2.42304.0.0`):
-- The old directory is destroyed, and pristine untouched JS files are unpacked.
-- Build content hashes rotate completely (e.g., `c593f7513-*.js` became `c227f4d5e-*.js` and `c9543da06-*.js`).
-- Scripts hardcoding static filenames or version numbers fail immediately.
-- **Our solution**: Adaptive regex AST sniffing scans active bundles regardless of hash rotation.
-
-### 6. Why did `.bat` close in 1 second?
-Saving batch scripts in UTF-8 causes byte misalignment in Windows `cmd.exe`. Pure ANSI/GBK encoding with Python native `ShellExecuteW runas` completely solves this.
+1. **Claude 3.x Collapses Slider into Dropdown Submenu**:
+   - In Claude Desktop 3.x (e.g. `3.6556.2`), Anthropic redesigned the bottom chin layout. It leaves `thinkingStyle` undefined for composer chins, collapsing the slider into a nested submenu.
+2. **Missing 6th "Ultracode" Effort Level**:
+   - While the Claude Code CLI supports `/effort ultracode`, the desktop UI truncates the slider to 5 stops (`low` ~ `max`).
+3. **Silent Reset on 3rd-Party Models (DeepSeek)**:
+   - For non-Anthropic models lacking the proprietary `xhigh` flag, an internal gate `_e = (he || oe)` evaluates to `false` and triggers a background reset (`Ce({ultracode: false})`).
+4. **Trigger Pill Locked on "High"**:
+   - The trigger button rendered in the bottom chin hardcodes `label: q(L)` or `label: H(N)`, decoupling from the slider's active selection.
+5. **MSIX Automatic Update Overwrites**:
+   - WindowsApps quietly replaces entire installation directories on major updates, wiping manual patches.
 
 ---
 
-## Is Ultracode Actually Real?
+## Solutions Provided
 
-**Yes, absolutely.**  
-When Ultracode is active:
-1. It injects a system-level prompt instruction forcing the `Workflow` tool suite.
-2. It explicitly directs the model to decompose complex tasks into parallel subagents.
-3. It bypasses default subagent concurrency caps, creating true multi-agent parallelism.
+- **Forces Standalone Slider**: Overrides `thinkingStyle: "separate"` across all composer placements to permanently revive the slider.
+- **Injects 6th Stop**: Dynamically extends the model option filter chain to include `{id: "ultracode", name: "Ultracode"}` with native `font-medium text-pro` purple styling.
+- **Bypasses 3P Model Gate**: Disables model gating so DeepSeek and OpenAI-compatible proxies retain Ultracode.
+- **Synchronizes Trigger Pill**: Dynamically binds the trigger pill label and purple accent to the active Ultracode state.
+- **Idempotent Self-Elevating Installer**: Automatically handles Windows UAC elevation, process termination, ACL unlocks, and version detection.
 
 ---
 
-## Usage (Automated Adaptive Patch)
+## AST Replacement Specification (v2.x & v3.x)
 
-The patch script features **cross-version dynamic detection**:
-- Queries `(Get-AppxPackage *Claude*).InstallLocation` dynamically.
-- Locates target AST patterns in large bundles (>40KB) via regex without depending on fixed filenames.
-- Triggers native Windows UAC elevation, unlocks system write permissions.
-- **Clean Backups**: Backs up pristine files into `Claude_Patch_Backup` directory on Desktop, preventing unassociated blank white icons.
-- Safely restarts Claude Desktop upon completion.
+| Target | File Pattern | Original (Old) | Patched |
+| :--- | :--- | :--- | :--- |
+| **Slider Revival** | `c227f4d5e-*.js` | `w$={shortcuts:!0}` | `w$={shortcuts:!0,thinkingStyle:"separate"}` |
+| **6th Stop Injection** | `c227f4d5e-*.js` | `let i=e.filter(...)` | `let i=[...e.filter(...),{id:"ultracode",name:"Ultracode"}],a=i;` |
+| **Bidirectional Dispatch** | `c9543da06-*.js` | `(e,t)=>mt(e,!1,{...})` | `(e,t)=>e==="ultracode"?mt("xhigh",!0,{...}):mt(e,!1,{...})` |
+| **3P Model Gate Bypass** | `c9543da06-*.js` | `&&(me\|\|K)&&` / `&&(he\|\|oe)&&` | `&&(!0)&&` |
+| **Presentation Hook** | `c9543da06-*.js` | `wt=pe?Y:null` / `tt=G?pe:null` | `wt=pe?(ye\|\|_e\|\|Y==="xhigh"?"ultracode":Y):null` |
+| **Trigger Pill Linkage** | `c8e04f916-*.js` | `label:H(N)` / `label:q(L)` | `label:(I===g.length-1\|\|...?"Ultracode":H(N))` |
 
-### Step 1: Clone or Download
+---
+
+## Quick Start
+
+### Option 1: Download Release (Recommended)
+
+1. Go to the [Releases](https://github.com/Zorix666/claude-ultracode-revival/releases) page and download `claude-ultracode-revival.zip`.
+2. Extract the archive and double-click **`patch_ultracode.bat`**.
+3. Accept the Windows UAC elevation prompt. The script will patch the bundle and restart Claude in under 1 second.
+
+### Option 2: Clone & Run
+
 ```bash
 git clone https://github.com/Zorix666/claude-ultracode-revival.git
 cd claude-ultracode-revival
-```
-
-### Step 2: Run Patch
-**Double-click [`patch_ultracode.bat`](patch_ultracode.bat)** or run in terminal:
-```bash
 python apply_patch.py
 ```
-Click **Yes** on the Windows UAC prompt.
-
-The script will automatically:
-1. Terminate running Claude instances;
-2. Auto-locate active Claude version path (e.g. `Claude_2.42304.0.0`);
-3. Remove WindowsApps write protection (`takeown` / `icacls`);
-4. Backup original files to `Claude_Patch_Backup` on Desktop;
-5. Inject the 4-patch closure (scale, interaction, presented state, and capsule display);
-6. Safely restart Claude Desktop.
 
 ---
 
-## The 4-Patch System (Diffs)
+## Compatibility Matrix
 
-### Patch 1: Stop 6 Catalog Expansion (`c227f4d5e-*.js`)
-```diff
-- let i=e.filter(e=>vc(e.id)?t:Ha([e]).length>0),a=i.length===e.length?e:i;
-+ let i=[...e.filter(e=>!vc(e.id)&&Ha([e]).length>0),{id:"ultracode",name:"Ultracode"}],a=i;
-```
-
-### Patch 2: Bi-directional Drag Dispatch (`c9543da06-*.js`)
-```diff
-- Ze=x((e,t)=>Je(e,!1,{recordAsPick:t?.recordAsPick}),[Je]),
-+ Ze=x((e,t)=>e==="ultracode"?Je("xhigh",!0,{recordAsPick:t?.recordAsPick}):Je(e,!1,{recordAsPick:t?.recordAsPick}),[Je]),
-```
-
-### Patch 3: Presentation Variable Hook (`c9543da06-*.js`)
-```diff
-- tt=G?pe:null
-+ tt=G?(ye||K||pe==="xhigh"?"ultracode":pe):null
-```
-
-### Patch 4: Bottom-Right Trigger Capsule Binding (`c8e04f916-*.js`)
-```diff
-- I=v.findIndex(e=>e.id===y),L=I>=0?I:0
-+ I=v.findIndex(e=>e.id===(y==="xhigh"?"ultracode":y)),L=I>=0?I:(y==="ultracode"||y==="xhigh"?v.length-1:0)
-```
-
----
-
-## Defensive Configuration
-
-In `~/.claude/settings.json`:
-```json
-{
-  "ultracode": true,
-  "effortLevel": "high"
-}
-```
-
-In `%LOCALAPPDATA%\Claude-3p\configLibrary\<id>.json` (for 3p users):
-- Remove `maxEffort: "high"` to prevent clamping catalog to 3 stops.
-- Set `defaultModelEffort` to `"high"` or `"xhigh"`.
+- [x] **Claude Desktop v3.6556.2+** (Latest Claude 3.x, restores collapsed slider)
+- [x] **Claude Desktop v2.42304+** (Classic v2.x, unlocks 6th stop)
+- [x] **Claude Desktop v2.31226+**
+- [x] **3rd-Party Gateway Support**: DeepSeek, OpenAI-compatible relays, direct APIs
+- [x] **Operating System**: Windows 11 / Windows 10 (x64)
 
 ---
 
 ## License
-[MIT License](LICENSE) © 2026
+
+This project is licensed under the [MIT License](LICENSE).
