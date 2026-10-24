@@ -200,11 +200,11 @@ def patch_bundle():
         if 'pe==="xhigh"?"ultracode":pe' in f2_content or 'Y==="xhigh"?"ultracode":Y' in f2_content:
             log(f"[OK] 胶囊呈现实体已处于生效状态 -> {f2_name}")
         elif 'wt=pe?Y:null,Tt=' in f2_content:
-            f2_content = f2_content.replace('wt=pe?Y:null,Tt=', 'wt=pe?(ye||_e||Y==="xhigh"?"ultracode":Y):null,Tt=', 1)
+            f2_content = f2_content.replace('wt=pe?Y:null,Tt=', 'wt=pe?(ye||_e?"ultracode":Y):null,Tt=', 1)
             modified_f2 = True
             log(f"[OK] 成功修复胶囊呈现实体挂钩 (v3) -> {f2_name}")
         elif 'tt=G?pe:null' in f2_content:
-            f2_content = f2_content.replace('tt=G?pe:null', 'tt=G?(ye||K||pe==="xhigh"?"ultracode":pe):null', 1)
+            f2_content = f2_content.replace('tt=G?pe:null', 'tt=G?(ye||K?"ultracode":pe):null', 1)
             modified_f2 = True
             log(f"[OK] 成功修复胶囊呈现实体挂钩 (v2) -> {f2_name}")
 
@@ -256,13 +256,13 @@ def patch_bundle():
         m3_idx_v3 = p3_idx_v3.search(f3_content)
         if m3_idx_v3 and 'ultracode' not in m3_idx_v3.group(0):
             ee_var, g_var, te_var, n_var = m3_idx_v3.groups()
-            repl_idx = f'{ee_var}={g_var}.findIndex({te_var}),{n_var}={ee_var}>=0?{ee_var}:(_==="ultracode"||_==="xhigh"?{g_var}.length-1:0)'
+            repl_idx = f'{ee_var}={g_var}.findIndex({te_var}),{n_var}={ee_var}>=0?{ee_var}:(_==="ultracode"?{g_var}.length-1:0)'
             f3_content = f3_content.replace(m3_idx_v3.group(0), repl_idx, 1)
             modified_f3 = True
             log(f"[OK] 成功绑定胶囊索引查找 (v3) -> {f3_name}")
         elif 'I=v.findIndex(e=>e.id===y),L=I>=0?I:0' in f3_content:
             p4_old = 'I=v.findIndex(e=>e.id===y),L=I>=0?I:0'
-            p4_new = 'I=v.findIndex(e=>e.id===(y==="xhigh"?"ultracode":y)),L=I>=0?I:(y==="ultracode"||y==="xhigh"?v.length-1:0)'
+            p4_new = 'I=v.findIndex(e=>e.id===(y==="xhigh"?"ultracode":y)),L=I>=0?I:(y==="ultracode"?v.length-1:0)'
             f3_content = f3_content.replace(p4_old, p4_new, 1)
             modified_f3 = True
             log(f"[OK] 成功绑定胶囊索引查找 (v2) -> {f3_name}")
@@ -275,11 +275,11 @@ def patch_bundle():
         else:
             # v3 形式
             old_trig_v3 = 'tt=typeof de=="function"?de({label:H(N),warningLabel:K,open:j,disabled:S||!R}):de??n(ee,{variant:"ghost",size:C,"data-cds":"ModelSelectorEffort","aria-label":q,"aria-keyshortcuts":We,"aria-disabled":z!==void 0||void 0,className:s("min-w-0 shrink-0",z!==void 0&&"opacity-disabled",pe),children:[t("span",{className:"min-w-0 truncate",children:H(N)}),'
-            expr_v3 = '(I===g.length-1||F?.id==="ultracode"||_==="ultracode"||_==="xhigh"?"Ultracode":H(N))'
+            expr_v3 = 'H(I)'
             repl_trig_v3 = f'tt=typeof de=="function"?de({{label:{expr_v3},warningLabel:K,open:j,disabled:S||!R}}):de??n(ee,{{variant:"ghost",size:C,"data-cds":"ModelSelectorEffort","aria-label":q,"aria-keyshortcuts":We,"aria-disabled":z!==void 0||void 0,className:s("min-w-0 shrink-0",z!==void 0&&"opacity-disabled",pe),children:[t("span",{{className:s("min-w-0 truncate",ke&&"font-medium text-pro"),children:{expr_v3}}}),'
 
             # v2 形式
-            expr_v2 = '(H===v.length-1||B?.id==="ultracode"||y==="ultracode"||y==="xhigh"?"Ultracode":q(L))'
+            expr_v2 = 'q(H)'
             old_trig_v2 = 'render:typeof O=="function"?O({label:q(L),warningLabel:Z,open:M,disabled:S||!W}):O??t(ee,{variant:"ghost",size:C,"data-cds":"ModelSelectorEffort","aria-label":Oe,"aria-keyshortcuts":Ae,className:_("min-w-0 shrink-0",ce),children:[r("span",{className:"min-w-0 truncate",children:q(L)}),'
             repl_trig_v2 = f'render:typeof O=="function"?O({{label:{expr_v2},warningLabel:Z,open:M,disabled:S||!W}}):O??t(ee,{{variant:"ghost",size:C,"data-cds":"ModelSelectorEffort","aria-label":Oe,"aria-keyshortcuts":Ae,className:_("min-w-0 shrink-0",ce),children:[r("span",{{className:_("min-w-0 truncate",_e&&"font-medium text-pro"),children:{expr_v2}}}),'
 
