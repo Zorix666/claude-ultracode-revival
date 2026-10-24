@@ -270,7 +270,7 @@ def patch_bundle():
             log(f"[OK] 胶囊索引查找已处于生效状态 -> {f3_name}")
 
         # 补丁 3.2：Trigger 药丸文字与高亮实时联动
-        if 'I===g.length-1' in f3_content or 'H===v.length-1' in f3_content:
+        if 'Ultracode":H(N)' in f3_content or 'Ultracode":q(L)' in f3_content:
             log(f"[OK] 右下角胶囊实时联动已处于生效状态 -> {f3_name}")
         else:
             # v3 形式
