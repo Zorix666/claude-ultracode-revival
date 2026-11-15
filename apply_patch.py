@@ -11,11 +11,18 @@ import subprocess
 import ctypes
 import time
 
-log_file = os.path.join(os.path.expanduser('~'), 'Desktop', 'patch_execution.log')
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LOG_DIR = os.path.join(BASE_DIR, 'logs')
+BACKUP_DIR = os.path.join(BASE_DIR, 'backup')
+log_file = os.path.join(LOG_DIR, 'patch_execution.log')
+
+AUMID = 'Claude_pzs8sxrjxfjjc!Claude'
+
 
 def log(msg):
     print(msg)
     try:
+        os.makedirs(LOG_DIR, exist_ok=True)
         with open(log_file, 'a', encoding='utf-8') as f:
             f.write(msg + '\n')
     except Exception:
@@ -36,20 +43,52 @@ def run_elevation():
     sys.exit(0)
 
 def get_claude_install_dir():
+    """定位真正在跑的那个安装目录。
+
+    绝不要按 mtime 排序：多版本目录并存时，刚下载但尚未启用的版本 mtime 最新，
+    补丁会装进一个永远不会被运行的目录 —— 界面毫无变化，日志却显示成功。
+    最可靠的是直接问正在运行的进程要路径。
+    """
+    # 1) 正在运行的 claude.exe 在哪
     try:
-        cmd = ['powershell', '-NoProfile', '-Command', '(Get-AppxPackage *Claude*).InstallLocation']
-        res = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        path = res.stdout.strip().splitlines()[-1].strip() if res.stdout.strip() else None
-        if path and os.path.isdir(path):
-            return path
+        res = subprocess.run(
+            ['powershell', '-NoProfile', '-Command',
+             '(Get-Process claude -ErrorAction SilentlyContinue | '
+             'Select-Object -First 1 -ExpandProperty Path)'],
+            capture_output=True, text=True)
+        p = (res.stdout or '').strip().splitlines()
+        if p and p[0].strip() and os.path.isfile(p[0].strip()):
+            return os.path.dirname(os.path.dirname(p[0].strip()))
     except Exception:
         pass
 
+    # 2) Appx 注册信息
+    try:
+        res = subprocess.run(
+            ['powershell', '-NoProfile', '-Command',
+             '(Get-AppxPackage Claude).InstallLocation'],
+            capture_output=True, text=True)
+        for line in (res.stdout or '').splitlines():
+            path = line.strip()
+            if path and os.path.isdir(path):
+                return path
+    except Exception:
+        pass
+
+    # 3) 目录名按版本号解析（不是 mtime）
     try:
         dirs = glob.glob(r'C:\Program Files\WindowsApps\Claude_*_x64__pzs8sxrjxfjjc')
+
+        def ver(d):
+            name = os.path.basename(d)
+            parts = name.split('_')[1].split('.') if '_' in name else ['0']
+            try:
+                return tuple(int(x) for x in parts)
+            except ValueError:
+                return (0,)
+
         if dirs:
-            dirs.sort(key=lambda d: os.path.getmtime(d), reverse=True)
-            return dirs[0]
+            return sorted(dirs, key=ver)[-1]
     except Exception:
         pass
 
@@ -69,6 +108,8 @@ def patch_bundle():
     log("  Claude Desktop Ultracode 智能自适应永久固化修复工具 (v2/v3 通用)")
     log("=" * 65)
 
+    start_ts = time.time()
+
     # 1. 关停 Claude
     log("\n[*] 正在关闭运行中的 Claude 客户端...")
     subprocess.run(['taskkill', '/F', '/IM', 'Claude.exe'], capture_output=True)
@@ -83,10 +124,17 @@ def patch_bundle():
     log(f"[*] 锁定当前活跃版本路径:\n    {claude_dir}")
     assets_dir = os.path.join(claude_dir, 'app', 'resources', 'ion-dist', 'assets', 'v1')
     if not os.path.isdir(assets_dir):
+        # 5.x 起前端被打进单个 ion-dist.asar，不再是解包目录，正则改文件这条路走不通
+        asar = os.path.join(claude_dir, 'app', 'resources', 'ion-dist.asar')
+        if os.path.isfile(asar):
+            log("[!] 这是 5.x 的 asar 形态，本脚本不适用。")
+            log("    请改用：python build_asar.py --asar <原件> --exe <原件>")
+            log("            python install_asar.py")
+            return False
         log(f"[!] 资源目录不存在: {assets_dir}")
         return False
 
-    backup_dir = os.path.join(os.path.expanduser('~'), 'Desktop', 'Claude_Patch_Backup')
+    backup_dir = BACKUP_DIR
     os.makedirs(backup_dir, exist_ok=True)
     all_js = glob.glob(os.path.join(assets_dir, '*.js'))
     large_js = [f for f in all_js if os.path.getsize(f) > 40000]
@@ -298,18 +346,52 @@ def patch_bundle():
     else:
         log("[WARN] 未能定位到胶囊触发器组件 f3")
 
+    # 4. 语法门禁：改坏了就当场还原，不要留给用户一个白屏的客户端
+    log("\n[*] 正在做语法门禁校验 ...")
+    touched = [p for p in glob.glob(os.path.join(assets_dir, '*.js'))
+               if os.path.getmtime(p) >= start_ts - 1]
+    broken = []
+    for p in touched:
+        try:
+            r = subprocess.run(['node', '--check', p], capture_output=True, text=True)
+            if r.returncode != 0:
+                broken.append((p, (r.stderr or r.stdout)[:400]))
+        except FileNotFoundError:
+            log("[WARN] 没装 node，跳过语法门禁（建议装 node 后再打一次）")
+            break
+        except Exception as e:
+            log(f"[WARN] 语法检查异常: {e}")
+            break
+
+    if broken:
+        log("\n[!] 语法门禁未通过，正在回滚：")
+        for p, err in broken:
+            log(f"    {os.path.basename(p)}: {err.splitlines()[0] if err else ''}")
+            bak = os.path.join(backup_dir, f"{os.path.basename(p)}.bak-original")
+            if os.path.isfile(bak):
+                try:
+                    shutil.copy2(bak, p)
+                    log(f"    已还原 {os.path.basename(p)}")
+                except Exception as e:
+                    log(f"    还原失败 {os.path.basename(p)}: {e}")
+        log("\n[FAIL] 本次补丁已撤销，Claude 保持原样。")
+        return False
+
+    log("[OK] 语法门禁通过")
+
     log("\n" + "=" * 65)
     log("  [SUCCESS] 永久固化全部完成！")
     log("  滑块已恢复独立显示，拥有 6 档刻度，胶囊常驻显示为紫色的 Ultracode！")
     log("=" * 65)
 
-    # 4. 重新拉起 Claude
+    # 5. 重新拉起 Claude
+    #    必须走 AUMID：直接 explorer.exe 指向 app\Claude.exe 会绕过 MSIX 包身份，
+    #    轻则起不来，重则起成一个没有沙盒注册表的野进程，会话列表全空。
     log("\n[*] 正在重新拉起 Claude Desktop 客户端...")
     try:
-        claude_exe = os.path.join(claude_dir, 'app', 'Claude.exe')
-        subprocess.Popen(f'explorer.exe "{claude_exe}"', shell=True)
+        subprocess.Popen(['explorer.exe', f'shell:AppsFolder\\{AUMID}'])
     except Exception as e:
-        log(f"[!] 自动拉起提示: 请从桌面或开始菜单手动打开 Claude ({e})")
+        log(f"[!] 自动拉起失败，请从开始菜单手动打开 Claude ({e})")
 
     return True
 

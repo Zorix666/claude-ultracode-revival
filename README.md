@@ -5,7 +5,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows-0078D6)](#quick-start)
-[![Claude Desktop](https://img.shields.io/badge/Claude%20Desktop-v2.x%20~%20v3.x%20(3.6556.2+)-black)](#ast-replacement-specification)
+[![Claude Desktop](https://img.shields.io/badge/Claude%20Desktop-v2.x%20~%20v5.x-black)](#compatibility-matrix)
 [![Release](https://img.shields.io/badge/Release-v2.0.0-purple.svg)](https://github.com/Zorix666/claude-ultracode-revival/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#)
 
@@ -86,6 +86,59 @@ When running Claude Desktop on Windows (especially with third-party gateways lik
 
 ---
 
+## Claude 5.x (asar) Mode
+
+Starting with 5.x the frontend ships as a **single `ion-dist.asar`** instead of an unpacked
+`ion-dist/assets/v1/` directory. Editing individual `.js` files no longer works, so 5.x has its
+own pipeline: unpack → replace byte strings → repack → sync the hash embedded in `claude.exe`.
+
+```bash
+# 1. Point at the ORIGINAL (unpatched) files from the installed package
+python build_asar.py --asar "<install>\app\resources\ion-dist.asar" \
+                     --exe  "<install>\app\claude.exe"
+
+# 2. Install (auto-elevates, health-checks for 40s, rolls back on failure)
+python install_asar.py
+```
+
+The build refuses to finish if any target string is missing or ambiguous, and every patched
+module must pass `node --check` before a single byte is written.
+
+| Target | Module | Change |
+| :--- | :--- | :--- |
+| Slider mode | `shared-8` | `thinkingStyle:"inline"/"submenu"` → `"separate"` |
+| 6th stop | `shared-36` / `shared-222` | append `{id:"ultra",name:"Ultracode"}` |
+| Stop whitelists | `shared-4`, `shared-192`, `shared-0`, `cd4f82e77`, `c325ea79a` | add `"ultra"` (5 modules — miss one and the slider snaps back) |
+| State clamp | `cc2521586`, `shared-33` | let `ultra` through the clamp and the session marker |
+| Bottom pill | `c82492f2c`, `cc43287c9` | always render the standalone Effort pill, kill the model-name merge |
+| Panel | `c8e04f916` | `w-[220px]` → `w-[260px]`, accent keys off `ultra` |
+
+### Colours
+
+The pill and the panel title must both resolve to the **same CSS variable**:
+
+```js
+color: "var(--cds-text-pro)"   // .text-pro → violet-600 #5437B8 (light) / violet-300 (dark)
+```
+
+Hard-coding a hex value, or using `--cds-violet-450` (`#785EE8`), makes the bottom pill visibly
+brighter than the panel title. The project deliberately ships **no glow, no border, no background
+tint** — glowing variants were tried and rejected.
+
+### asar repacking rules
+
+Three things must hold, or the app white-screens with an error that points nowhere near the cause:
+
+1. **`offset` must be a string.** The Chromium C++ side reads it with `FindString("offset")`;
+   an integer makes it return `nullptr` and every file becomes `ENOENT` — even `index.html`.
+2. **Pickle header**: `f0=4`, `f1=4+f2`, `f2=4+padded_json_len`, `f3=json_len`, data starts at `8+f1`.
+3. **`integrity`**: update `integrity.hash` **and** `integrity.blocks` (chunked by `blockSize`).
+
+The header's sha256 is embedded in `claude.exe`; repacking without patching it back in gets you a
+silent instant exit.
+
+---
+
 ## Quick Start
 
 ### Option 1: Download Release (Recommended)
@@ -106,11 +159,27 @@ python apply_patch.py
 
 ## Compatibility Matrix
 
+- [x] **Claude Desktop 5.11492.5.0** (asar mode — `build_asar.py` / `install_asar.py`)
 - [x] **Claude Desktop v3.6556.2+** (Latest Claude 3.x, restores collapsed slider)
 - [x] **Claude Desktop v2.42304+** (Classic v2.x, unlocks 6th stop)
 - [x] **Claude Desktop v2.31226+**
 - [x] **3rd-Party Gateway Support**: DeepSeek, OpenAI-compatible relays, direct APIs
 - [x] **Operating System**: Windows 11 / Windows 10 (x64)
+
+Other versions will fail loudly at the first unmatched target string — that is intentional.
+Re-locating the patch points is a 10-minute job; silently producing a half-patched bundle is not.
+
+## Known Pitfalls
+
+These all cost real debugging time; they are documented so you don't pay for them twice.
+
+| Symptom | Cause |
+| :--- | :--- |
+| Patch reports success, UI unchanged | Multiple version directories coexist and the patch went into one that is not running. Resolve the install path from the **running process**, never from directory mtime. |
+| Patched client won't start or starts with an empty session list | Launched via `explorer.exe <dir>\app\claude.exe` instead of the package identity. Use `explorer.exe shell:AppsFolder\Claude_pzs8sxrjxfjjc!Claude`. |
+| White screen, `ENOENT` for every asset | asar `offset` written as an integer instead of a string. |
+| Instant exit after install | `integrity.blocks` not recomputed alongside `integrity.hash`. |
+| Patch silently reverts after a reboot | A login guard task re-applies a stale build. Update the guard's target directory **and** its expected hash together. |
 
 ---
 

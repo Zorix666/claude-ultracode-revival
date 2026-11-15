@@ -1,0 +1,19 @@
+# 构建产物与本地备份（含上游二进制，绝不入库）
+build/
+backup/
+logs/
+check/
+
+# 上游分发文件
+*.asar
+*.exe
+*.orig
+*.prev
+
+# Python
+__pycache__/
+*.pyc
+
+# 编辑器
+.vscode/
+.idea/

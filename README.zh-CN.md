@@ -5,7 +5,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows-0078D6)](#快速开始)
-[![Claude Desktop](https://img.shields.io/badge/Claude%20Desktop-v2.x%20~%20v3.x%20(3.6556.2+)-black)](#全架构-ast-替换规范)
+[![Claude Desktop](https://img.shields.io/badge/Claude%20Desktop-v2.x%20~%20v5.x-black)](#兼容性与验证矩阵)
 [![Release](https://img.shields.io/badge/Release-v2.0.0-purple.svg)](https://github.com/Zorix666/claude-ultracode-revival/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#)
 
@@ -106,6 +106,56 @@ flowchart TD
 
 ---
 
+## Claude 5.x（asar 形态）
+
+从 5.x 起，前端不再是解包的 `ion-dist/assets/v1/` 目录，而是单个 **`ion-dist.asar`**。
+改单个 `.js` 文件这条路走不通，5.x 走另一条流水线：解包 → 替换字节串 → 重打包 → 同步 `claude.exe` 里内嵌的哈希。
+
+```bash
+# 1. 指向安装目录里的【原件】（未打补丁的那份）
+python build_asar.py --asar "<install>\app\resources\ion-dist.asar" ^
+                     --exe  "<install>\app\claude.exe"
+
+# 2. 安装（自动提权，40 秒健康检查，失败自动回滚）
+python install_asar.py
+```
+
+构建器对每个补丁点做唯一性断言，并对每个改过的模块跑 `node --check`，
+任何一个不通过就**一个字节都不写**。
+
+| 目标 | 模块 | 改动 |
+| :--- | :--- | :--- |
+| 滑块模式 | `shared-8` | `thinkingStyle:"inline"/"submenu"` → `"separate"` |
+| 第 6 档 | `shared-36` / `shared-222` | 追加 `{id:"ultra",name:"Ultracode"}` |
+| 档位白名单 | `shared-4`、`shared-192`、`shared-0`、`cd4f82e77`、`c325ea79a` | 加 `"ultra"`（**共 5 处，漏一处就会拖到末档弹回 Extra**） |
+| 状态钳制 | `cc2521586`、`shared-33` | 放行 `ultra`，关卡后不被重置 |
+| 底栏药丸 | `c82492f2c`、`cc43287c9` | 恒渲染独立 Effort 胶囊，掐掉与模型名合体 |
+| 面板 | `c8e04f916` | `w-[220px]` → `w-[260px]`，accent 判定改认 `ultra` |
+
+### 配色
+
+胶囊和面板标题必须解析到**同一个 CSS 变量**：
+
+```js
+color: "var(--cds-text-pro)"   // .text-pro → violet-600 #5437B8（浅色）/ violet-300（深色）
+```
+
+写死十六进制、或改用 `--cds-violet-450`（`#785EE8`），底栏会明显比面板标题亮。
+本项目**刻意不加任何光晕、边框、底色** —— 带发光的版本试过，已被否决。
+
+### asar 重打包的三条铁律
+
+写错任何一条都会白屏，而且报错信息完全指不到真正的原因：
+
+1. **`offset` 必须是字符串**。C++ 侧用 `FindString("offset")` 取值，写成整数会返回 `nullptr`，
+   所有文件瞬间变成 `ENOENT`，连 `index.html` 都读不到。
+2. **Pickle 头四字段**：`f0=4`、`f1=4+f2`、`f2=4+padded_json_len`、`f3=json_len`，数据区从 `8+f1` 开始。
+3. **`integrity` 要成对更新**：`integrity.hash` 和 `integrity.blocks`（按 `blockSize` 分块）缺一不可。
+
+另外，header 的 sha256 是内嵌在 `claude.exe` 里的，重打包后不同步替换，客户端会静默秒退。
+
+---
+
 ## 快速开始
 
 本工具采用纯 Python + Windows 原生 API 编写，内置 Windows UAC 管理员自动提权、自动探测当前最新活跃版本、解除 ACL 保护、幂等注入与自动重启。
@@ -128,11 +178,25 @@ python apply_patch.py
 
 ## 兼容性与验证矩阵
 
-- [x] **Claude Desktop v3.6556.2+**（当前最新版本，完美恢复被折叠的滑块）
+- [x] **Claude Desktop 5.11492.5.0**（asar 形态，走 `build_asar.py` / `install_asar.py`）
+- [x] **Claude Desktop v3.6556.2+**（Claude 3.x，完美恢复被折叠的滑块）
 - [x] **Claude Desktop v2.42304+**（经典版本，完美固化 6 档）
 - [x] **Claude Desktop v2.31226+**
 - [x] **第三方网关兼容**：DeepSeek 全系列、OpenAI 协议中继、Claude 官方 Direct API
 - [x] **系统环境**：Windows 11 / Windows 10 (x64)
+
+其它版本会在第一个不匹配的目标串处**直接失败** —— 这是刻意的。
+重新定位补丁点是十分钟的活；悄悄产出一个只打了一半的包不是。
+
+## 已知坑（都是真金白银踩出来的）
+
+| 现象 | 原因 |
+| :--- | :--- |
+| 日志显示成功，界面毫无变化 | 多版本目录并存，补丁装进了一个没在运行的目录。安装路径必须从**正在运行的进程**反查，不能按目录 mtime 取最新。 |
+| 打完客户端起不来，或起来后会话列表全空 | 用 `explorer.exe <dir>\app\claude.exe` 拉起，绕过了 MSIX 包身份。要走 `explorer.exe shell:AppsFolder\Claude_pzs8sxrjxfjjc!Claude`。 |
+| 白屏，所有资源报 `ENOENT` | asar 的 `offset` 写成了整数，没有写成字符串。 |
+| 装完立刻退出 | 只改了 `integrity.hash`，没重算 `integrity.blocks`。 |
+| 重启后补丁自动变回旧版 | 开机守卫任务在重装它记着的旧构建。**改构建目录时，目标 hash 必须一起改**。 |
 
 ---
 
