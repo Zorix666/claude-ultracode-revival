@@ -156,6 +156,78 @@ color: "var(--cds-text-pro)"   // .text-pro → violet-600 #5437B8（浅色）/ 
 
 ---
 
+## Claude 4.23118（Electron 独立版）
+
+这是**另一条发行渠道**：装在 `%LOCALAPPDATA%\Programs\Claude`，而不是
+`C:\Program Files\WindowsApps`；版本号自成一套（4.23xxx，与 MSIX 的 5.x/6.x 毫无关系），
+模块名也完全不同。
+
+目录结构少一层 `app\`：
+
+```
+<root>\resources\ion-dist.asar
+<root>\claude.exe
+```
+
+**从运行中的进程反查安装路径**——两个渠道共存时，目录列表和 mtime 都会骗人：
+
+```powershell
+Get-CimInstance Win32_Process -Filter "Name='claude.exe'" |
+  Select-Object ProcessId, ExecutablePath | Format-List
+```
+
+```bash
+# 1. 构建，输入必须是「未打补丁」的原件（即 .bak 副本）
+python build_asar_v4.py --asar "<root>\resources\ion-dist.asar.bak" \
+                        --exe  "<root>\claude.exe.bak" \
+                        --out  build/v4
+
+# 2. 安装（用户目录，无需提权）
+python install_electron.py --build build/v4
+```
+
+| 目标 | 模块 | 改动 |
+| :--- | :--- | :--- |
+| 滑块形态 | `shared-8` | `thinkingStyle:"inline"/"submenu"` → `"separate"` |
+| 场景配置 | `c227f4d5e` | `case"chin"/"row"` 返回 separate 预设，而不是裸 `HR` |
+| 第 6 档 | `shared-8` 的 `Vb`、`shared-7` 的 `GV()` | `Vb` 是 zod 枚举的唯一源头，改它整条链路自动放行 |
+| 档位白名单 | `shared-0`、`shared-196`、`shared-4`、`cd4f82e77`、`c227f4d5e` | 追加 `"ultracode"` |
+| 底栏胶囊 | `cc43287c9` | 恒渲染、掐掉模型名拼接、纯紫文字 |
+| 面板 | `c8e04f916` | `w-[220px]` → `w-[260px]`，摘掉独立 Toggle 行 |
+
+### 谁决定「列表还是滑块」
+
+由 `c227f4d5e` 里一个函数决定：
+
+```js
+var zR={shortcuts:!0,thinkingStyle:"separate"}, BR=zR, VR={…zR,overflowSearch:!0},
+    HR={shortcuts:!0}, WR={…HR,overflowStyle:"inline",thinkingStyle:"inline"}, …
+
+function YR(e,t,n){switch(e){
+  case"chin":case"row":return n?t?GR:WR:t?UR:HR;   // HR 无 thinkingStyle → submenu → 列表
+  case"titlebar":return t?JR:qR;
+  case"rail":return t?VR:BR;                        // separate → 滑块
+  case"composer":return t?VR:zR}}
+```
+
+输入框下方的环境栏正是 `chin`/`row`，所以拿到 `HR`、渲染成列表。
+改成返回 separate 预设才会出现滑块。
+
+### 为什么这一代的第 6 档用 `"ultracode"` 而不是 `"ultra"`
+
+这个版本**原生就认 `"ultracode"`**，直接复用它比自造 `"ultra"` 再逐个手补消费方划算：
+
+| 位置 | 代码 | 用 `"ultra"` 时还得补 |
+| :--- | :--- | :--- |
+| `shared-33` | `var fT="ultracode"; function pT(e){return e===fT}` | `\|\|e==="ultra"` |
+| `shared-7` | `m=t.id==="ultracode"?"text-pro font-medium":void 0` | `\|\|t.id==="ultra"` |
+| `c10f0af0c` | `EX(e){if(e===void 0\|\|e==="ultracode")return e; let t=Ud.safeParse(e);…}` | 同样要放行 |
+
+`EX()` 在 `safeParse` 之前抢先放行，恰恰说明 **zod schema 本身并不接受 `"ultracode"`**——
+所以 schema 源头 `Vb` 必须在同一次补丁里一起扩。
+
+---
+
 ## 快速开始
 
 本工具采用纯 Python + Windows 原生 API 编写，内置 Windows UAC 管理员自动提权、自动探测当前最新活跃版本、解除 ACL 保护、幂等注入与自动重启。
@@ -179,6 +251,7 @@ python apply_patch.py
 ## 兼容性与验证矩阵
 
 - [x] **Claude Desktop 5.11492.5.0**（asar 形态，走 `build_asar.py` / `install_asar.py`）
+- [x] **Claude Desktop 4.23118.x**（Electron 独立版，走 `build_asar_v4.py` / `install_electron.py`）
 - [x] **Claude Desktop v3.6556.2+**（Claude 3.x，完美恢复被折叠的滑块）
 - [x] **Claude Desktop v2.42304+**（经典版本，完美固化 6 档）
 - [x] **Claude Desktop v2.31226+**
@@ -192,7 +265,11 @@ python apply_patch.py
 
 | 现象 | 原因 |
 | :--- | :--- |
-| 日志显示成功，界面毫无变化 | 多版本目录并存，补丁装进了一个没在运行的目录。安装路径必须从**正在运行的进程**反查，不能按目录 mtime 取最新。 |
+| 日志显示成功，界面毫无变化 | **两个发行渠道并存**：`WindowsApps\Claude_<ver>` 的 MSIX 版，和 `%LOCALAPPDATA%\Programs\Claude` 的 Electron 独立版。两个都能装着，只有一个在跑——补丁多半打进了没在跑的那个。安装路径必须从**正在运行的进程**（`Get-CimInstance Win32_Process`）反查，不能按目录 mtime 取最新；而且两条渠道的版本号体系互不相干，比版本号也推不出来。 |
+| 独立版打完起不来 / 白屏 | 构建输入必须是 `.bak` 原件。拿已经打过补丁的 `ion-dist.asar` 当输入，产出的包与新拷过去的 `claude.exe` 内嵌 header 哈希对不上。 |
+| 守卫什么都不做，或日志全是乱码 | 计划任务跑的是 `pythonw.exe`（GUI 子系统），`sys.stdout` 为 `None`，裸 `print()` 会抛 `AttributeError` 把脚本带崩——必须 `try/except`。日志首次创建要写 UTF-8 **BOM**，Windows 工具会把无 BOM 的 UTF-8 按 GBK 解。 |
+| 守卫把刚升级的新版本盖成旧版 | 只要 hash 不等就重装，等于上游一升级就拿旧构建盖新 JS。必须加 `orig_hash` 白名单：只有当前 header 等于原版才打补丁，其余一律判定为版本漂移、大声跳过。 |
+| 守卫把另一个 Claude 窗口也杀了 | `taskkill /im claude.exe` 会同时命中两个渠道——它们的内嵌 exe 同名。必须按完整路径杀：`Get-Process claude \| Where-Object { $_.Path -eq '<exe>' } \| Stop-Process -Force`。 |
 | 打完客户端起不来，或起来后会话列表全空 | 用 `explorer.exe <dir>\app\claude.exe` 拉起，绕过了 MSIX 包身份。要走 `explorer.exe shell:AppsFolder\Claude_pzs8sxrjxfjjc!Claude`。 |
 | 白屏，所有资源报 `ENOENT` | asar 的 `offset` 写成了整数，没有写成字符串。 |
 | 装完立刻退出 | 只改了 `integrity.hash`，没重算 `integrity.blocks`。 |
