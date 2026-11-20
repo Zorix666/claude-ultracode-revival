@@ -190,10 +190,27 @@ python install_electron.py --build build/v4
 | :--- | :--- | :--- |
 | 滑块形态 | `shared-8` | `thinkingStyle:"inline"/"submenu"` → `"separate"` |
 | 场景配置 | `c227f4d5e` | `case"chin"/"row"` 返回 separate 预设，而不是裸 `HR` |
-| 第 6 档 | `shared-8` 的 `Vb`、`shared-7` 的 `GV()` | `Vb` 是 zod 枚举的唯一源头，改它整条链路自动放行 |
+| 滑块光效 | `c227f4d5e` | `fe` 恒为 `$R` —— 只有末档才亮，不再跟着开关走 |
+| 第 6 档 | `shared-8` 的 `Vb`、`shared-7` 的 `GV()` | 扩 zod 枚举；注入档位，**并洗掉后端下发的 `" · Ultracode"` 名字后缀** |
 | 档位白名单 | `shared-0`、`shared-196`、`shared-4`、`cd4f82e77`、`c227f4d5e` | 追加 `"ultracode"` |
-| 底栏胶囊 | `cc43287c9` | 恒渲染、掐掉模型名拼接、纯紫文字 |
+| ultracode 开关 | `c9543da06` | 选档时提交 `id === "ultracode"`，不再把上一次的值原样带过去 |
+| 底栏胶囊 | `cc43287c9`、`c8e04f916` | 恒渲染、纯紫文字、label 改用 `G(R)`、不传 toggleLabel |
 | 面板 | `c8e04f916` | `w-[220px]` → `w-[260px]`，摘掉独立 Toggle 行 |
+
+### 四个互不替代的失败路径
+
+看着像一个 bug，其实是四条独立链路。只修其中一条，其余照旧 —— 这就是为什么
+把它当成「一个根因」来修会反复返工：
+
+| 现象 | 链路 |
+| :--- | :--- |
+| 胶囊显示 `Extra · Ultracode` | ultracode 开关为真时，后端下发的档位**名字**本身就带这个后缀（i18n 模板 `"{level} · {ultracode}"`）。它在 option 的 `name` 里，**不在** `toggleLabel` —— 把 label 置空没用，必须在 `GV()` 里洗掉。 |
+| 选了第 6 档，胶囊还显示 `Extra` | `c8e04f916` 用 `G(F)` 打标签，`F` 是**后端生效档位**下标，ultracode 下仍指向 `xhigh`。改用 `G(R)`（用户实际拖到的那一格）。 |
+| 切到 Max/High 轨道还发光 | 强制 separate 后 `fe` 跟 `v.on` 走：`ez` 恒亮、`tz` 恒灭。开关只要真过一次，每一档都亮。恒用 `$R`。 |
+| 开关永远清不掉 | `c9543da06` 每次选档都把 `Pe()`（当前开关值）当第二个参数提交，于是切回 High 时旧的 `true` 还活着。 |
+
+最后一条**别抄 5.x 的 `At(e, e>"max", …)`**：字符串比较对 `"xhigh"` 也成立
+（`'x' > 'm'`），会把 Extra 误判成 ultracode。写 `e === "ultracode"`。
 
 ### 谁决定「列表还是滑块」
 
@@ -267,6 +284,7 @@ python apply_patch.py
 | :--- | :--- |
 | 日志显示成功，界面毫无变化 | **两个发行渠道并存**：`WindowsApps\Claude_<ver>` 的 MSIX 版，和 `%LOCALAPPDATA%\Programs\Claude` 的 Electron 独立版。两个都能装着，只有一个在跑——补丁多半打进了没在跑的那个。安装路径必须从**正在运行的进程**（`Get-CimInstance Win32_Process`）反查，不能按目录 mtime 取最新；而且两条渠道的版本号体系互不相干，比版本号也推不出来。 |
 | 独立版打完起不来 / 白屏 | 构建输入必须是 `.bak` 原件。拿已经打过补丁的 `ion-dist.asar` 当输入，产出的包与新拷过去的 `claude.exe` 内嵌 header 哈希对不上。 |
+| 补丁打了、客户端也重启了，界面还是老的 | Chromium 把编译后的 JS 缓存在 user-data 目录（`Claude-3p\Code Cache`、`GPUCache`）。换 asar 时要一并清掉——`install_electron.py` 默认会清（`--keep-cache` 可关闭）。 |
 | 守卫什么都不做，或日志全是乱码 | 计划任务跑的是 `pythonw.exe`（GUI 子系统），`sys.stdout` 为 `None`，裸 `print()` 会抛 `AttributeError` 把脚本带崩——必须 `try/except`。日志首次创建要写 UTF-8 **BOM**，Windows 工具会把无 BOM 的 UTF-8 按 GBK 解。 |
 | 守卫把刚升级的新版本盖成旧版 | 只要 hash 不等就重装，等于上游一升级就拿旧构建盖新 JS。必须加 `orig_hash` 白名单：只有当前 header 等于原版才打补丁，其余一律判定为版本漂移、大声跳过。 |
 | 守卫把另一个 Claude 窗口也杀了 | `taskkill /im claude.exe` 会同时命中两个渠道——它们的内嵌 exe 同名。必须按完整路径杀：`Get-Process claude \| Where-Object { $_.Path -eq '<exe>' } \| Stop-Process -Force`。 |

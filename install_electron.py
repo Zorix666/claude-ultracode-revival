@@ -33,6 +33,32 @@ DEFAULT_ROOT = os.path.join(
     os.environ.get("LOCALAPPDATA", os.path.expanduser(r"~\AppData\Local")),
     "Programs", "Claude")
 
+# Chromium's profile dir. The standalone build runs with --user-data-dir pointing
+# here (visible in the child process command lines).
+DEFAULT_USER_DATA = os.path.join(
+    os.environ.get("LOCALAPPDATA", os.path.expanduser(r"~\AppData\Local")),
+    "Claude-3p")
+
+
+def clear_code_cache(user_data):
+    """Drop V8's compiled-JS cache.
+
+    Chromium caches compiled scripts under the user-data dir, keyed by source.
+    Swapping the asar without clearing it can leave the *old* bundle running even
+    though the process restarted — the UI looks untouched and it is easy to blame
+    the patch. Returns the entries actually removed.
+    """
+    removed = []
+    for name in ('Code Cache', 'GPUCache'):
+        d = os.path.join(user_data, name)
+        if os.path.isdir(d):
+            try:
+                shutil.rmtree(d)
+                removed.append(name)
+            except Exception as e:
+                log(f'  [cache] could not remove {d}: {e}')
+    return removed
+
 
 def log(msg):
     print(msg, flush=True)
@@ -84,6 +110,9 @@ def main():
     ap.add_argument('--build', default='build/v4', help='directory with ion-dist.asar + claude.exe')
     ap.add_argument('--dry-run', action='store_true', help='report what would happen')
     ap.add_argument('--no-launch', action='store_true', help='do not start Claude afterwards')
+    ap.add_argument('--user-data', default=DEFAULT_USER_DATA,
+                    help='Chromium profile dir, used to clear the JS code cache')
+    ap.add_argument('--keep-cache', action='store_true', help='do not clear the JS code cache')
     args = ap.parse_args()
 
     root = os.path.abspath(args.dir)
@@ -125,6 +154,13 @@ def main():
         if running:
             log(f'[FAIL] {running} process(es) still alive; close Claude and retry')
             return 1
+
+    if not args.keep_cache:
+        removed = clear_code_cache(args.user_data)
+        if removed:
+            log(f'[cache] cleared: {", ".join(removed)}')
+        else:
+            log('[cache] nothing to clear')
 
     log('[backup]')
     ensure_backup(dst_asar)

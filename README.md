@@ -175,10 +175,28 @@ python install_electron.py --build build/v4
 | :--- | :--- | :--- |
 | Slider mode | `shared-8` | `thinkingStyle:"inline"/"submenu"` → `"separate"` |
 | Surface config | `c227f4d5e` | `case"chin"/"row"` returns the `separate` preset instead of plain `HR` |
-| 6th stop | `shared-8` `Vb`, `shared-7` `GV()` | `Vb` is the single zod-enum source; extend it and the whole chain accepts |
+| Slider glow | `c227f4d5e` | `fe` pinned to `$R` — lit only at the last stop, not whenever the flag is on |
+| 6th stop | `shared-8` `Vb`, `shared-7` `GV()` | extend the zod enum; inject the stop **and strip the backend's `" · Ultracode"` name suffix** |
 | Stop whitelists | `shared-0`, `shared-196`, `shared-4`, `cd4f82e77`, `c227f4d5e` | append `"ultracode"` |
-| Bottom pill | `cc43287c9` | always render, drop the model-name merge, pure violet text |
+| Ultracode flag | `c9543da06` | pick commits `id === "ultracode"` instead of carrying the previous flag forward |
+| Bottom pill | `cc43287c9`, `c8e04f916` | always render, pure violet text, label from `G(R)`, no toggle label |
 | Panel | `c8e04f916` | `w-[220px]` → `w-[260px]`, remove the standalone toggle row |
+
+### Four independent failure paths
+
+These look like one bug and are not. Fixing one leaves the others intact, which is
+exactly why this takes several passes if you assume a single root cause:
+
+| Symptom | Path |
+| :--- | :--- |
+| Pill reads `Extra · Ultracode` | The backend ships stop *names* with that suffix when the ultracode flag is on (i18n template `"{level} · {ultracode}"`). It is in the option name, **not** in `toggleLabel` — nulling the label does nothing. `GV()` has to strip it. |
+| 6th stop selected, pill still says `Extra` | `c8e04f916` labels the trigger with `G(F)` — the backend's *effective* index, which still points at `xhigh` under ultracode. Use `G(R)`, the locally chosen position. |
+| Track stays lit at Max/High | With `separate` forced, `fe` follows `v.on`: `ez` is always-lit, `tz` never. Once the flag has been true, the slider glows on every stop. Pin `fe` to `$R`. |
+| Flag never clears | `c9543da06` commits `Pe()` (the current flag) as the second argument on every pick, so a previously-true value survives a switch back to High. |
+
+Do **not** port the 5.x form `At(e, e>"max", …)` for the last one: that string
+comparison is also true for `"xhigh"` (`'x' > 'm'`), so Extra gets misread as
+ultracode. Use the explicit `e === "ultracode"`.
 
 ### Which surface preset wins
 
@@ -253,6 +271,8 @@ These all cost real debugging time; they are documented so you don't pay for the
 | :--- | :--- |
 | Patch reports success, UI unchanged | **Two distribution channels coexist**: the MSIX package under `WindowsApps\Claude_<ver>` and the Electron standalone under `%LOCALAPPDATA%\Programs\Claude`. Both can be installed; only one is running, and you probably patched the other. Resolve the install path from the **running process** (`Get-CimInstance Win32_Process`), never from directory mtime — and note the two channels use unrelated version series, so comparing version numbers tells you nothing. |
 | Patched standalone client hangs at launch or shows blank UI | The standalone channel needs the `.bak` originals as build input. Feeding it an already-patched `ion-dist.asar` produces a bundle whose header hash no longer matches the `claude.exe` you copied alongside it. |
+| Patch applied, client restarted, UI still shows the old layout | Chromium caches compiled JS under the user-data dir (`Claude-3p\Code Cache`, `GPUCache`). Clear them when swapping the asar — `install_electron.py` does it by default (`--keep-cache` opts out). |
+| Every anchor check fails after a previous successful install | The install's own `ion-dist.asar` is already patched. Build from the `.bak` originals and assert the input header hash, or the patch silently targets the wrong bytes. |
 | Guard silently does nothing, or its log is mojibake | The scheduled task runs `pythonw.exe` (GUI subsystem): `sys.stdout` is `None`, so a bare `print()` raises `AttributeError` and kills the script. Wrap it in `try/except`. Write the log with a UTF-8 **BOM** on first creation — Windows tools read BOM-less UTF-8 as GBK. |
 | Guard marches a stale build over a freshly updated app | A guard that re-applies on *any* hash mismatch will overwrite a newer version's JS. Require an `orig_hash` allow-list: patch only when the current header equals the pristine hash; anything else is version drift and must be skipped loudly. |
 | Guard kills your other Claude window | `taskkill /im claude.exe` matches both channels — they ship executables with the same name. Kill by full path: `Get-Process claude \| Where-Object { $_.Path -eq '<exe>' } \| Stop-Process -Force`. |

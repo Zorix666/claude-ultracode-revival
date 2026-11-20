@@ -72,8 +72,14 @@ PATCHES = [
 
     # ============ shared-7: inject 6th stop + force separate ============
     ('shared-7-', [
+        # When the ultracode flag is on, the backend itself ships stop names like
+        # "Extra · Ultracode" (the i18n template "{level} · {ultracode}").
+        # Strip that suffix first, otherwise the bottom pill keeps the tail and the
+        # 6th stop still reads "Extra". This bites even after toggleLabel is nulled,
+        # because the value comes from the option *name*, not from the toggle.
         (b'function GV(e){return e?.thinking?.effort_options??[]}',
-         b'function GV(e){let a=e?.thinking?.effort_options??[];'
+         b'function GV(e){let a=(e?.thinking?.effort_options??[]).map(o=>'
+         b'({...o,name:(o.name||"").replace(/\\s*\\u00B7\\s*Ultracode$/,"")}));'
          b'return a.some(e=>e.id==="ultracode")?a:a.concat({id:"ultracode",name:"Ultracode"})}', 1),
         (b're=c?.thinkingStyle==="separate"?[]:GV(ne)',
          b're=[]', 1),
@@ -94,6 +100,15 @@ PATCHES = [
          b'case"chin":case"row":return t?VR:BR;', 1),
         (b'tR=["low","medium","high","xhigh","max"]',
          b'tR=["low","medium","high","xhigh","max","ultracode"]', 1),
+        # Slider glow. Official code:
+        #   fe = F ? (v ? (v.on ? ez : tz) : void 0)
+        #            : (last stop is ultracode ? $R : void 0)
+        # ez = always lit, tz = never lit, $R = lit only at the last stop (atMax).
+        # We force `separate`, so F is always true and the glow follows the
+        # ultracode toggle instead of the chosen stop: once that flag has ever
+        # been true, the track glows at Max/High too. Pin it to $R.
+        (b'fe=F?v?v.on?ez:tz:void 0:uf(ue?.thinking?.effort_options?.at(-1)?.id)?$R:void 0',
+         b'fe=$R', 1),
     ]),
 
     # ============ cc43287c9: environment row / bottom pill ============
@@ -109,7 +124,8 @@ PATCHES = [
          b'{overridden:K("effort"),label:r?m.formatMessage(fB.levelWithUltracode,'
          b'{level:n,ultracode:r}):n})})}}):null',
          b'effort:p(sy.Effort,{...n.effort,tooltip:Ce,shortcut:Te,renderTrigger:e=>{'
-         b'let{label:n,toggleLabel:r}=e,isU=n==="Ultracode"||r==="Ultracode"||n==="ultracode";'
+         b'let{label:n,toggleLabel:r}=e,isU=n==="Ultracode"||r==="Ultracode"||n==="ultracode"'
+         b'||n.includes("Ultracode");'
          b'return p(he,{variant:"ghost",className:G5(t),"data-testid":"environment-row-effort",'
          b'children:isU?p("span",{className:"font-medium text-pro",'
          b'style:{color:"var(--cds-text-pro)"},children:"Ultracode"}):p(q5,'
@@ -119,6 +135,20 @@ PATCHES = [
         # environment row must flip. Anchor on its neighbours.
         (b'finalFocus:G??a,reportEffortOptionCount:!1,environmentModelId:be.modelId',
          b'finalFocus:G??a,reportEffortOptionCount:!0,environmentModelId:be.modelId', 1),
+    ]),
+
+    # ============ c9543da06: pin the ultracode flag to the chosen stop ============
+    ('c9543da06', [
+        # Official code passes Pe() — the *current* ultracode flag — as the second
+        # argument on every pick, so once Ultracode has been turned on it stays on
+        # forever: switching back to High/Max still yields "High · Ultracode", the
+        # slider keeps glowing, and the panel title keeps its accent.
+        # Upstream can do that because ultracode is a standalone toggle. We made it
+        # the 6th stop, so the flag has to follow the stop itself.
+        # Do NOT copy the 5.x form `At(e, e>"max", …)`: that string comparison is
+        # also true for "xhigh" ('x' > 'm') and misreads Extra as ultracode.
+        (b'(e,t)=>At(e,Pe(),{recordAsPick:t?.recordAsPick})',
+         b'(e,t)=>At(e,e==="ultracode",{recordAsPick:t?.recordAsPick})', 1),
     ]),
 
     # ============ c74045701: i18n ============
@@ -149,6 +179,24 @@ PATCHES = [
 
 WIDTH_MODULE = 'c8e04f916'
 WIDTH_PAIRS = [(b'w-[220px]', b'w-[260px]')]
+
+# Panel-side fixes that must land after the toggle row is cut.
+PANEL_PAIRS = [
+    # The pill text must follow the *locally chosen* stop index R, not the
+    # backend's effective index F. Under ultracode F still points at xhigh/max,
+    # so the pill reads "Extra"/"Max" even when the 6th stop is selected.
+    # R is the position the user actually dragged to, and it is the same source
+    # the panel title uses (ft = G(R)) — so the two stay consistent.
+    (b'pe({label:G(F),warningLabel:Y,',
+     b'pe({label:G(R),warningLabel:Y,'),
+    # Stop forwarding the toggle label to the custom trigger; otherwise
+    # cc43287c9 formats it as "High · Ultracode".
+    (b'toggleLabel:N,open:M,disabled:C||!B}',
+     b'toggleLabel:null,open:M,disabled:C||!B}'),
+    # Accent only when the selected stop really is the 6th one.
+    (b'Ne=z?.id==="ultracode"||N!==null',
+     b'Ne=z?.id==="ultracode"'),
+]
 
 # The Ultracode toggle row lives in c8e04f916. Its slot index ($124) is stable
 # across 5.x and 4.23.x, so anchor on the structure and cut to the trailing
@@ -283,6 +331,13 @@ def apply_patches(raw, v1, base):
         else:
             blob = blob2
             print(f'  [toggle] {name}: Ultracode toggle row removed')
+        for old, new in PANEL_PAIRS:
+            cnt = blob.count(old)
+            if cnt != 1:
+                errors.append(f'{name}: panel anchor hit {cnt}x (want 1)\n    {old[:90]!r}')
+                continue
+            blob = blob.replace(old, new, 1)
+        print(f'  [panel]  {name}: pill text and accent decoupled from the toggle')
         replacements['assets/v1/' + name] = blob
 
     return replacements, errors
