@@ -58,11 +58,20 @@ def is_admin():
 
 
 def elevate():
+    """提权重开自己时**必须带上原始参数**，否则子进程会退回默认 --dir。"""
     script = os.path.abspath(__file__)
+    args = list(sys.argv[1:])
+    # --dir 必须转成绝对路径：提权后的子进程工作目录不是当前目录
+    for i, a in enumerate(args):
+        if a == '--dir' and i + 1 < len(args):
+            args[i + 1] = os.path.abspath(args[i + 1])
+    params = f'"{script}"'
+    if args:
+        params += ' ' + subprocess.list2cmdline(args)
     ret = ctypes.windll.shell32.ShellExecuteW(
-        None, 'runas', sys.executable, f'"{script}"', None, 1)
+        None, 'runas', sys.executable, params, None, 1)
     if ret <= 32:
-        log('[!] 提权被拒绝，无法写入 Program Files')
+        log(f'[!] 提权失败（ShellExecuteW 返回 {ret}），请手动以管理员身份运行本脚本')
     sys.exit(0)
 
 

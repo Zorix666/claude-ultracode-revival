@@ -17,3 +17,7 @@ __pycache__/
 # 编辑器
 .vscode/
 .idea/
+
+# Guard runtime config (contains local absolute paths)
+tools/guard_config.json
+guard.log

@@ -139,6 +139,81 @@ silent instant exit.
 
 ---
 
+## Claude 4.23118 (Electron standalone) Mode
+
+A **different distribution channel**: this build installs under
+`%LOCALAPPDATA%\Programs\Claude` instead of `C:\Program Files\WindowsApps`, keeps its own
+version numbering (4.23xxx, unrelated to the MSIX 5.x/6.x series), and uses an entirely
+different set of module names.
+
+Its layout drops the `app\` level:
+
+```
+<root>\resources\ion-dist.asar
+<root>\claude.exe
+```
+
+Locate the install from the **running process** — directory listings and mtimes lie when two
+channels coexist:
+
+```powershell
+Get-CimInstance Win32_Process -Filter "Name='claude.exe'" |
+  Select-Object ProcessId, ExecutablePath | Format-List
+```
+
+```bash
+# 1. Build, pointing at the PRISTINE files (the .bak copies)
+python build_asar_v4.py --asar "<root>\resources\ion-dist.asar.bak" \
+                        --exe  "<root>\claude.exe.bak" \
+                        --out  build/v4
+
+# 2. Install (no elevation needed — user-writable directory)
+python install_electron.py --build build/v4
+```
+
+| Target | Module | Change |
+| :--- | :--- | :--- |
+| Slider mode | `shared-8` | `thinkingStyle:"inline"/"submenu"` → `"separate"` |
+| Surface config | `c227f4d5e` | `case"chin"/"row"` returns the `separate` preset instead of plain `HR` |
+| 6th stop | `shared-8` `Vb`, `shared-7` `GV()` | `Vb` is the single zod-enum source; extend it and the whole chain accepts |
+| Stop whitelists | `shared-0`, `shared-196`, `shared-4`, `cd4f82e77`, `c227f4d5e` | append `"ultracode"` |
+| Bottom pill | `cc43287c9` | always render, drop the model-name merge, pure violet text |
+| Panel | `c8e04f916` | `w-[220px]` → `w-[260px]`, remove the standalone toggle row |
+
+### Which surface preset wins
+
+The list-vs-slider decision is made by one function in `c227f4d5e`:
+
+```js
+var zR={shortcuts:!0,thinkingStyle:"separate"}, BR=zR, VR={…zR,overflowSearch:!0},
+    HR={shortcuts:!0}, WR={…HR,overflowStyle:"inline",thinkingStyle:"inline"}, …
+
+function YR(e,t,n){switch(e){
+  case"chin":case"row":return n?t?GR:WR:t?UR:HR;   // HR has no thinkingStyle -> submenu -> LIST
+  case"titlebar":return t?JR:qR;
+  case"rail":return t?VR:BR;                        // separate -> SLIDER
+  case"composer":return t?VR:zR}}
+```
+
+The environment row under the composer is a `chin`/`row` surface, so it lands on `HR` and renders
+a list. Patch it to return the `separate` preset and you get the slider.
+
+### Why the 6th stop is `"ultracode"` here, not `"ultra"`
+
+This build already knows `"ultracode"` end to end, so reusing that id for free is strictly better
+than inventing `"ultra"` and patching every consumer by hand:
+
+| Location | Code | with `"ultra"` you'd also need |
+| :--- | :--- | :--- |
+| `shared-33` | `var fT="ultracode"; function pT(e){return e===fT}` | `\|\|e==="ultra"` |
+| `shared-7` | `m=t.id==="ultracode"?"text-pro font-medium":void 0` | `\|\|t.id==="ultra"` |
+| `c10f0af0c` | `EX(e){if(e===void 0\|\|e==="ultracode")return e; let t=Ud.safeParse(e);…}` | same guard |
+
+`EX()` short-circuiting before `safeParse` is the tell: the zod schema itself does **not**
+accept `"ultracode"`, which is why the schema source `Vb` must be extended in the same patch.
+
+---
+
 ## Quick Start
 
 ### Option 1: Download Release (Recommended)
@@ -160,6 +235,7 @@ python apply_patch.py
 ## Compatibility Matrix
 
 - [x] **Claude Desktop 5.11492.5.0** (asar mode — `build_asar.py` / `install_asar.py`)
+- [x] **Claude Desktop 4.23118.x** (Electron standalone — `build_asar_v4.py` / `install_electron.py`)
 - [x] **Claude Desktop v3.6556.2+** (Latest Claude 3.x, restores collapsed slider)
 - [x] **Claude Desktop v2.42304+** (Classic v2.x, unlocks 6th stop)
 - [x] **Claude Desktop v2.31226+**
@@ -175,7 +251,11 @@ These all cost real debugging time; they are documented so you don't pay for the
 
 | Symptom | Cause |
 | :--- | :--- |
-| Patch reports success, UI unchanged | Multiple version directories coexist and the patch went into one that is not running. Resolve the install path from the **running process**, never from directory mtime. |
+| Patch reports success, UI unchanged | **Two distribution channels coexist**: the MSIX package under `WindowsApps\Claude_<ver>` and the Electron standalone under `%LOCALAPPDATA%\Programs\Claude`. Both can be installed; only one is running, and you probably patched the other. Resolve the install path from the **running process** (`Get-CimInstance Win32_Process`), never from directory mtime — and note the two channels use unrelated version series, so comparing version numbers tells you nothing. |
+| Patched standalone client hangs at launch or shows blank UI | The standalone channel needs the `.bak` originals as build input. Feeding it an already-patched `ion-dist.asar` produces a bundle whose header hash no longer matches the `claude.exe` you copied alongside it. |
+| Guard silently does nothing, or its log is mojibake | The scheduled task runs `pythonw.exe` (GUI subsystem): `sys.stdout` is `None`, so a bare `print()` raises `AttributeError` and kills the script. Wrap it in `try/except`. Write the log with a UTF-8 **BOM** on first creation — Windows tools read BOM-less UTF-8 as GBK. |
+| Guard marches a stale build over a freshly updated app | A guard that re-applies on *any* hash mismatch will overwrite a newer version's JS. Require an `orig_hash` allow-list: patch only when the current header equals the pristine hash; anything else is version drift and must be skipped loudly. |
+| Guard kills your other Claude window | `taskkill /im claude.exe` matches both channels — they ship executables with the same name. Kill by full path: `Get-Process claude \| Where-Object { $_.Path -eq '<exe>' } \| Stop-Process -Force`. |
 | Patched client won't start or starts with an empty session list | Launched via `explorer.exe <dir>\app\claude.exe` instead of the package identity. Use `explorer.exe shell:AppsFolder\Claude_pzs8sxrjxfjjc!Claude`. |
 | White screen, `ENOENT` for every asset | asar `offset` written as an integer instead of a string. |
 | Instant exit after install | `integrity.blocks` not recomputed alongside `integrity.hash`. |

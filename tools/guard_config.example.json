@@ -1,0 +1,26 @@
+{
+  "_comment": "Copy to guard_config.json and fill in your own paths and hashes. The msix_* entries are optional; drop them if you only use the standalone build.",
+  "log": "guard.log",
+  "msix_glob": "C:\\Program Files\\WindowsApps\\Claude_*_x64__pzs8sxrjxfjjc",
+  "msix_aumid": "Claude_pzs8sxrjxfjjc!Claude",
+
+  "targets": {
+    "Claude_6.28899.2.0_x64__pzs8sxrjxfjjc": {
+      "_comment": "MSIX package. Key MUST be the folder name under WindowsApps.",
+      "layout": "msix",
+      "build_dir": "C:\\path\\to\\build\\v6_28899",
+      "orig_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "patched_hash": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+
+    "electron:standalone": {
+      "_comment": "Electron standalone build. Key is arbitrary but must be unique.",
+      "layout": "electron",
+      "root": "C:\\Users\\<you>\\AppData\\Local\\Programs\\Claude",
+      "build_dir": "C:\\path\\to\\build\\v4",
+      "orig_hash": "af4e129499cc85a4ed63ff8486201a690de59b8a273933975781a7e1802c0f49",
+      "patched_hash": "40c4e3bbcbde178741383b086eb6e0d14cc9ffaea11d445e7c7aad07297885d8",
+      "label": "Claude Desktop (Electron standalone)"
+    }
+  }
+}
