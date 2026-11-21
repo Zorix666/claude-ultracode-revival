@@ -176,25 +176,31 @@ python install_electron.py --build build/v4
 | Slider mode | `shared-8` | `thinkingStyle:"inline"/"submenu"` → `"separate"` |
 | Surface config | `c227f4d5e` | `case"chin"/"row"` returns the `separate` preset instead of plain `HR` |
 | Slider glow | `c227f4d5e` | `fe` pinned to `$R` — lit only at the last stop, not whenever the flag is on |
-| 6th stop | `shared-8` `Vb`, `shared-7` `GV()` | extend the zod enum; inject the stop **and strip the backend's `" · Ultracode"` name suffix** |
+| 6th stop | `shared-8` `Vb`, `shared-7` `GV()` | extend the zod enum; inject the stop and strip the backend's `" · Ultracode"` name suffix |
 | Stop whitelists | `shared-0`, `shared-196`, `shared-4`, `cd4f82e77`, `c227f4d5e` | append `"ultracode"` |
-| Ultracode flag | `c9543da06` | pick commits `id === "ultracode"` instead of carrying the previous flag forward |
+| Ultracode flag (on pick) | `c9543da06` | pick commits `id === "ultracode"` instead of carrying the previous flag forward |
+| Ultracode flag (on open) | `c9543da06` | `Ee = we && Se` → `Ee = _e === "ultracode"`; the flag read a per-conversation Map, so old chats stayed on |
+| Pill label | `c3f9f1667` | `pe()` no longer formats `"{level} · {ultracode}"` |
+| Pill label (fallback) | `cc43287c9` | `label:r?formatMessage(levelWithUltracode…):n` → `label:n` |
+| Toggle label | `shared-7` | `f = a?.checked ? a.label : null` → `f = null` (plus scrub the name suffix) |
 | Bottom pill | `cc43287c9`, `c8e04f916` | always render, pure violet text, label from `G(R)`, no toggle label |
-| Panel | `c8e04f916` | `w-[220px]` → `w-[260px]`, remove the standalone toggle row |
+| Panel | `c8e04f916` | `w-[220px]` → `w-[260px]`, remove the standalone toggle row; fallback uses `G(R)` and no leftover accent |
 
-### Four independent failure paths
+### Six independent failure paths
 
 These look like one bug and are not. Fixing one leaves the others intact, which is
 exactly why this takes several passes if you assume a single root cause:
 
 | Symptom | Path |
 | :--- | :--- |
-| Pill reads `Extra · Ultracode` | The backend ships stop *names* with that suffix when the ultracode flag is on (i18n template `"{level} · {ultracode}"`). It is in the option name, **not** in `toggleLabel` — nulling the label does nothing. `GV()` has to strip it. |
+| Pill reads `Extra · Ultracode` | **Four** separate places format that suffix: `c3f9f1667`'s `pe()`, `shared-7`'s `toggleLabel` (`f = a?.checked ? a.label : null`), `cc43287c9`'s fallback `label:r?…`, and `c9543da06`'s `Dt()`. Grep `levelWithUltracode` across the whole bundle and fix all four — fixing one leaves the tail in place. |
 | 6th stop selected, pill still says `Extra` | `c8e04f916` labels the trigger with `G(F)` — the backend's *effective* index, which still points at `xhigh` under ultracode. Use `G(R)`, the locally chosen position. |
 | Track stays lit at Max/High | With `separate` forced, `fe` follows `v.on`: `ez` is always-lit, `tz` never. Once the flag has been true, the slider glows on every stop. Pin `fe` to `$R`. |
-| Flag never clears | `c9543da06` commits `Pe()` (the current flag) as the second argument on every pick, so a previously-true value survives a switch back to High. |
+| Flag never clears after picking another stop | `c9543da06` commits `Pe()` (the current flag) as the second argument on every pick, so a previously-true value survives a switch back to High. |
+| **An old conversation opens with Ultracode already on** | The flag is `Ee = we && Se`, and `we` reads a per-conversation in-memory Map (`hc.get(J) ?? false`). Old `true` values never expire. Derive it from the stop instead: `Ee = _e === "ultracode"`. |
+| **Panel fallback still paints violet off a stale flag** | `c8e04f916`'s non-function fallback uses `N && "text-pro"` and `G(F)`. Use `!1 && "text-pro"` and `G(R)`. |
 
-Do **not** port the 5.x form `At(e, e>"max", …)` for the last one: that string
+Do **not** port the 5.x form `At(e, e>"max", …)` for the flag-clearing one: that string
 comparison is also true for `"xhigh"` (`'x' > 'm'`), so Extra gets misread as
 ultracode. Use the explicit `e === "ultracode"`.
 

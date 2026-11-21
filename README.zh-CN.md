@@ -191,25 +191,31 @@ python install_electron.py --build build/v4
 | 滑块形态 | `shared-8` | `thinkingStyle:"inline"/"submenu"` → `"separate"` |
 | 场景配置 | `c227f4d5e` | `case"chin"/"row"` 返回 separate 预设，而不是裸 `HR` |
 | 滑块光效 | `c227f4d5e` | `fe` 恒为 `$R` —— 只有末档才亮，不再跟着开关走 |
-| 第 6 档 | `shared-8` 的 `Vb`、`shared-7` 的 `GV()` | 扩 zod 枚举；注入档位，**并洗掉后端下发的 `" · Ultracode"` 名字后缀** |
+| 第 6 档 | `shared-8` 的 `Vb`、`shared-7` 的 `GV()` | 扩 zod 枚举；注入档位，并洗掉后端下发的 `" · Ultracode"` 名字后缀 |
 | 档位白名单 | `shared-0`、`shared-196`、`shared-4`、`cd4f82e77`、`c227f4d5e` | 追加 `"ultracode"` |
-| ultracode 开关 | `c9543da06` | 选档时提交 `id === "ultracode"`，不再把上一次的值原样带过去 |
+| ultracode 开关（选档时） | `c9543da06` | 选档时提交 `id === "ultracode"`，不再把上一次的值原样带过去 |
+| ultracode 开关（打开会话时） | `c9543da06` | `Ee = we && Se` → `Ee = _e === "ultracode"`；原版按会话 id 读进程内 Map，旧对话的 `true` 永不过期 |
+| 胶囊文案 | `c3f9f1667` | `pe()` 不再套 `"{level} · {ultracode}"` 模板 |
+| 胶囊文案（fallback） | `cc43287c9` | `label:r?formatMessage(levelWithUltracode…):n` → `label:n` |
+| 开关标签 | `shared-7` | `f = a?.checked ? a.label : null` → `f = null`，并洗掉名字后缀 |
 | 底栏胶囊 | `cc43287c9`、`c8e04f916` | 恒渲染、纯紫文字、label 改用 `G(R)`、不传 toggleLabel |
-| 面板 | `c8e04f916` | `w-[220px]` → `w-[260px]`，摘掉独立 Toggle 行 |
+| 面板 | `c8e04f916` | `w-[220px]` → `w-[260px]`，摘掉独立 Toggle 行；fallback 改用 `G(R)` 且不按残留开关染紫 |
 
-### 四个互不替代的失败路径
+### 六个互不替代的失败路径
 
-看着像一个 bug，其实是四条独立链路。只修其中一条，其余照旧 —— 这就是为什么
+看着像一个 bug，其实不是。只修其中一条，其余照旧 —— 这就是为什么
 把它当成「一个根因」来修会反复返工：
 
 | 现象 | 链路 |
 | :--- | :--- |
-| 胶囊显示 `Extra · Ultracode` | ultracode 开关为真时，后端下发的档位**名字**本身就带这个后缀（i18n 模板 `"{level} · {ultracode}"`）。它在 option 的 `name` 里，**不在** `toggleLabel` —— 把 label 置空没用，必须在 `GV()` 里洗掉。 |
+| 胶囊显示 `Extra · Ultracode` | 拼这个后缀的地方**一共四处**：`c3f9f1667` 的 `pe()`、`shared-7` 的 `toggleLabel`（`f = a?.checked ? a.label : null`）、`cc43287c9` 的 fallback `label:r?…`、`c9543da06` 的 `Dt()`。全库 grep `levelWithUltracode` 一次列全，只改一处尾巴照旧在。 |
 | 选了第 6 档，胶囊还显示 `Extra` | `c8e04f916` 用 `G(F)` 打标签，`F` 是**后端生效档位**下标，ultracode 下仍指向 `xhigh`。改用 `G(R)`（用户实际拖到的那一格）。 |
 | 切到 Max/High 轨道还发光 | 强制 separate 后 `fe` 跟 `v.on` 走：`ez` 恒亮、`tz` 恒灭。开关只要真过一次，每一档都亮。恒用 `$R`。 |
-| 开关永远清不掉 | `c9543da06` 每次选档都把 `Pe()`（当前开关值）当第二个参数提交，于是切回 High 时旧的 `true` 还活着。 |
+| 切到别的档位后开关清不掉 | `c9543da06` 每次选档都把 `Pe()`（当前开关值）当第二个参数提交，于是切回 High 时旧的 `true` 还活着。 |
+| **打开一个用过的对话，ultracode 仍然是开的** | 开关态是 `Ee = we && Se`，`we` 读的是按会话 id 存的进程内 Map（`hc.get(J) ?? false`），旧值永不过期。改成由档位派生：`Ee = _e === "ultracode"`。 |
+| **面板 fallback 仍按残留开关染紫** | `c8e04f916` 里 `pe` 不是函数时走的那条分支用 `N && "text-pro"` 和 `G(F)`，改成 `!1 && "text-pro"` 与 `G(R)`。 |
 
-最后一条**别抄 5.x 的 `At(e, e>"max", …)`**：字符串比较对 `"xhigh"` 也成立
+第四条**别抄 5.x 的 `At(e, e>"max", …)`**：字符串比较对 `"xhigh"` 也成立
 （`'x' > 'm'`），会把 Extra 误判成 ultracode。写 `e === "ultracode"`。
 
 ### 谁决定「列表还是滑块」

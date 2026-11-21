@@ -89,6 +89,14 @@ PATCHES = [
          b'U=!0', 1),
         (b'v=f&&"text-pro",',
          b'v=(f||c?.id==="ultracode")&&"text-pro",', 1),
+        # `f` is what the trigger later receives as `toggleLabel`, and its value
+        # is `a?.checked ? a.label : null` — non-null whenever the *session's*
+        # ultracode flag is on, no matter which stop is selected. That is how
+        # "High · Ultracode" reached the bottom pill even after the option-name
+        # suffix was stripped. Pin it to null and scrub the name suffix too, so
+        # a stale flag can never resurrect the tail.
+        (b'd=c?.name??"",f=a?.checked?a.label:null,',
+         b'd=(c?.name??"").replace(/\\s*\\u00B7\\s*Ultracode$/,""),f=null,', 1),
     ]),
 
     # ============ c227f4d5e: which surface config each placement gets ============
@@ -135,6 +143,27 @@ PATCHES = [
         # environment row must flip. Anchor on its neighbours.
         (b'finalFocus:G??a,reportEffortOptionCount:!1,environmentModelId:be.modelId',
          b'finalFocus:G??a,reportEffortOptionCount:!0,environmentModelId:be.modelId', 1),
+        # Fallback label path (used when the trigger is not a function): never
+        # format the "level · Ultracode" template, just show the stop.
+        (b'label:r?m.formatMessage(fB.levelWithUltracode,{level:n,ultracode:r}):n',
+         b'label:n', 1),
+    ]),
+
+    # ============ c3f9f1667: the environment-row pill's label producer ============
+    # cc43287c9 imports this module's pe() (aliased `WV`) to compute the effort
+    # text on the environment row. Upstream, when the ultracode flag is on and
+    # the layout is `separate`, it deliberately swaps the stop name for
+    # formatMessage(levelWithUltracode, {level, ultracode}) — i.e.
+    # "Max · Ultracode". `separate` is forced here, so that branch always runs.
+    # Our 6th stop is a real stop, so the label is simply the current one.
+    ('c3f9f1667', [
+        (b'function pe(e,t){if(!e)return null;'
+         b'let n=e.options.find(t=>t.id===e.level)?.label??null,{ultracode:r}=e;'
+         b'return r?.on?r.separate?n===null?null:t.formatMessage(O.levelWithUltracode,'
+         b'{level:n,ultracode:r.label}):r.label:n}',
+         b'function pe(e,t){if(!e)return null;'
+         b'let n=e.options.find(t=>t.id===e.level);'
+         b'return n?.label??n?.name??null}', 1),
     ]),
 
     # ============ c9543da06: pin the ultracode flag to the chosen stop ============
@@ -149,6 +178,20 @@ PATCHES = [
         # also true for "xhigh" ('x' > 'm') and misreads Extra as ultracode.
         (b'(e,t)=>At(e,Pe(),{recordAsPick:t?.recordAsPick})',
          b'(e,t)=>At(e,e==="ultracode",{recordAsPick:t?.recordAsPick})', 1),
+        # Picking a stop is not enough: the flag *itself* is read back when a
+        # conversation is opened. It is `Ee = we && Se`, where `we` comes from a
+        # per-conversation in-memory Map (`hc.get(J) ?? false`). Conversations
+        # that once had ultracode on keep that `true` forever, so reopening them
+        # shows the flag as on while the slider sits on High. `_e` is the
+        # effective stop id (declared earlier in the same scope) — derive Ee
+        # from it so the flag can only ever mean "the slider is on ultracode".
+        (b'Ee=we&&Se,',
+         b'Ee=_e==="ultracode",', 1),
+        # Dt() builds fromLabel/toLabel for the switch-confirmation popover and
+        # also appends " · Ultracode" in separate mode. With a real 6th stop,
+        # the stop's own name is all we want.
+        (b'return t?j.formatMessage(Pa.levelWithUltracode,{level:i,ultracode:r}):i',
+         b'return i', 1),
     ]),
 
     # ============ c74045701: i18n ============
@@ -196,6 +239,10 @@ PANEL_PAIRS = [
     # Accent only when the selected stop really is the 6th one.
     (b'Ne=z?.id==="ultracode"||N!==null',
      b'Ne=z?.id==="ultracode"'),
+    # Trigger fallback for when `pe` is not a function: label from the local
+    # index R, and never paint violet from a leftover toggle flag.
+    (b'className:c("min-w-0 truncate",N&&"text-pro"),children:G(F)',
+     b'className:c("min-w-0 truncate",!1&&"text-pro"),children:G(R)'),
 ]
 
 # The Ultracode toggle row lives in c8e04f916. Its slot index ($124) is stable
